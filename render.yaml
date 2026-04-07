@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: fleetcc-backend
+    env: node
+    plan: free
+    rootDir: cauto-backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GPS_PROVIDER
+        value: mock
+      - key: JWT_SECRET
+        generateValue: true          # Render generates a secure random value
+      - key: FRONTEND_URL
+        sync: false                  # You set this manually after deploy

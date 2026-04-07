@@ -1,0 +1,12 @@
+# Misc
+*.log
+.DS_Store
+Thumbs.db
+
+# Local env files (never commit real secrets)
+.env
+.env.local
+.env.*.local
+
+# Uploaded files (binary, not for git)
+uploads/

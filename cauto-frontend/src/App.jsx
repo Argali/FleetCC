@@ -1502,7 +1502,7 @@ function AppInner(){
   const[redirecting,setRedirecting]=useState(true);
 
   useEffect(()=>{
-    msalInstance.handleRedirectPromise()
+    msalInstance.initialize().then(()=>msalInstance.handleRedirectPromise())
       .then(async result=>{
         if(result?.idToken){
           try{

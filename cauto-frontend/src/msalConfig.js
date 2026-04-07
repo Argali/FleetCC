@@ -17,4 +17,4 @@ export const loginRequest = {
 };
 
 export const msalInstance = new PublicClientApplication(msalConfig);
-await msalInstance.initialize();
+// Initialized lazily in AppInner before first use — no top-level await

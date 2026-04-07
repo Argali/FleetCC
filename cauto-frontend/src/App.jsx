@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
-import { msalInstance, msalReady, loginRequest } from "./msalConfig.js";
+import { msalInstance, loginRequest } from "./msalConfig.js";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -1502,7 +1502,7 @@ function AppInner(){
   const[redirecting,setRedirecting]=useState(true);
 
   useEffect(()=>{
-    msalReady.then(()=>msalInstance.handleRedirectPromise())
+    msalInstance.handleRedirectPromise()
       .then(async result=>{
         if(result?.idToken){
           try{

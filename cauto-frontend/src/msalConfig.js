@@ -17,6 +17,4 @@ export const loginRequest = {
 };
 
 export const msalInstance = new PublicClientApplication(msalConfig);
-
-// Initialize synchronously-safe: must be awaited before use in AppInner
-export const msalReady = msalInstance.initialize();
+await msalInstance.initialize();

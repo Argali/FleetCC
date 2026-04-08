@@ -367,7 +367,9 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
   return <div ref={containerRef} style={{height:"100%",width:"100%"}}/>;
 }
 
-// ─── ZONE MAP (drag-to-draw) ───────────────────────────────────────────────────
+// ─── ZONE MAP (multi-click draw) ──────────────────────────────────────────────
+const ZONE_CLICKS={circle:2,square:2,triangle:3,parallelogram:4};
+
 function ZoneMap({zones,drawMode,zoneConfig,onShapeComplete,onZoneDelete}){
   const containerRef=useRef(null);
   const mapRef=useRef(null);
@@ -377,15 +379,14 @@ function ZoneMap({zones,drawMode,zoneConfig,onShapeComplete,onZoneDelete}){
   const cbDel=useRef(onZoneDelete);
   const cfgRef=useRef(zoneConfig);
   const drawRef=useRef(drawMode);
-  const dragStart=useRef(null);
-  const dragging=useRef(false);
-  const triVerts=useRef([]);
+  const clickVerts=useRef([]);
+  const cursorPos=useRef(null);
   useEffect(()=>{cbComplete.current=onShapeComplete;},[onShapeComplete]);
   useEffect(()=>{cbDel.current=onZoneDelete;},[onZoneDelete]);
-  useEffect(()=>{cfgRef.current=zoneConfig;},[zoneConfig]);
+  useEffect(()=>{cfgRef.current=zoneConfig;clickVerts.current=[];if(previewLayerRef.current)previewLayerRef.current.clearLayers();},[zoneConfig]);
   useEffect(()=>{
     drawRef.current=drawMode;
-    if(!drawMode){ dragging.current=false; dragStart.current=null; triVerts.current=[]; if(previewLayerRef.current)previewLayerRef.current.clearLayers(); }
+    if(!drawMode){clickVerts.current=[];cursorPos.current=null;if(previewLayerRef.current)previewLayerRef.current.clearLayers();}
   },[drawMode]);
 
   useEffect(()=>{
@@ -395,62 +396,51 @@ function ZoneMap({zones,drawMode,zoneConfig,onShapeComplete,onZoneDelete}){
     zoneLayerRef.current=L.layerGroup().addTo(map);
     previewLayerRef.current=L.layerGroup().addTo(map);
 
-    map.on("mousedown",(e)=>{
-      if(!drawRef.current)return;
+    const refreshPreview=()=>{
+      const prev=previewLayerRef.current;if(!prev)return;
+      prev.clearLayers();
       const cfg=cfgRef.current;
-      if(cfg.type==="triangle")return;
-      L.DomEvent.stopPropagation(e);
-      dragStart.current=[e.latlng.lat,e.latlng.lng];
-      dragging.current=true;
-    });
+      const verts=clickVerts.current;
+      const cur=cursorPos.current;
+      const needed=ZONE_CLICKS[cfg.type]||2;
+      if(!verts.length&&!cur)return;
+      const style={fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity*0.5,color:cfg.borderColor,weight:2,opacity:0.7,dashArray:"6 4"};
+      verts.forEach((v,i)=>L.circleMarker(v,{radius:5,fillColor:cfg.borderColor,fillOpacity:1,color:"#fff",weight:1.5}).bindTooltip(`${i+1}`).addTo(prev));
+      const all=[...verts,...(cur&&verts.length<needed?[cur]:[])];
+      if(cfg.type==="circle"&&all.length>=2){
+        const r=L.latLng(all[0]).distanceTo(L.latLng(all[1]));
+        L.circle(all[0],{radius:r,...style}).addTo(prev);
+        L.polyline([all[0],all[1]],{color:cfg.borderColor,weight:1,dashArray:"4 4",opacity:0.5}).addTo(prev);
+      }else if(cfg.type==="square"&&all.length>=2){
+        L.rectangle([all[0],all[1]],style).addTo(prev);
+      }else if((cfg.type==="triangle"||cfg.type==="parallelogram")&&all.length>=2){
+        L.polyline(all,{color:cfg.borderColor,weight:2,dashArray:"6 4"}).addTo(prev);
+        if(all.length>=3)L.polygon(all,{...style,dashArray:null}).addTo(prev);
+      }
+    };
 
     map.on("mousemove",(e)=>{
-      if(!dragging.current||!dragStart.current)return;
-      const cfg=cfgRef.current;
-      const prev=previewLayerRef.current;
-      prev.clearLayers();
-      const style={fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity*0.6,color:cfg.borderColor,weight:2,opacity:0.8,dashArray:"6 4"};
-      if(cfg.type==="circle"){
-        const r=L.latLng(dragStart.current).distanceTo(e.latlng);
-        L.circle(dragStart.current,{radius:r,...style}).addTo(prev);
-        L.circleMarker(dragStart.current,{radius:5,fillColor:cfg.borderColor,fillOpacity:1,color:"#fff",weight:1}).addTo(prev);
-      }else if(cfg.type==="square"){
-        L.rectangle([dragStart.current,[e.latlng.lat,e.latlng.lng]],style).addTo(prev);
-      }
-    });
-
-    map.on("mouseup",(e)=>{
-      if(!dragging.current||!dragStart.current)return;
-      dragging.current=false;
-      const cfg=cfgRef.current;
-      previewLayerRef.current.clearLayers();
-      const id=Date.now();
-      if(cfg.type==="circle"){
-        const radius=L.latLng(dragStart.current).distanceTo(e.latlng);
-        if(radius>5)cbComplete.current({id,type:"circle",name:cfg.name,fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor,center:dragStart.current,radius});
-      }else if(cfg.type==="square"){
-        cbComplete.current({id,type:"square",name:cfg.name,fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor,bounds:[dragStart.current,[e.latlng.lat,e.latlng.lng]]});
-      }
-      dragStart.current=null;
+      if(!drawRef.current)return;
+      cursorPos.current=[e.latlng.lat,e.latlng.lng];
+      refreshPreview();
     });
 
     map.on("click",(e)=>{
       if(!drawRef.current)return;
       const cfg=cfgRef.current;
-      if(cfg.type!=="triangle")return;
       const latlng=[e.latlng.lat,e.latlng.lng];
-      triVerts.current=[...triVerts.current,latlng];
-      const prev=previewLayerRef.current;
-      L.circleMarker(latlng,{radius:6,fillColor:cfg.borderColor,fillOpacity:1,color:"#fff",weight:1.5})
-        .bindTooltip(`${triVerts.current.length}`).addTo(prev);
-      if(triVerts.current.length>=2)
-        L.polyline(triVerts.current,{color:cfg.borderColor,weight:2,dashArray:"6 4"}).addTo(prev);
-      if(triVerts.current.length===3){
-        const verts=[...triVerts.current];
-        triVerts.current=[];
-        prev.clearLayers();
-        cbComplete.current({id:Date.now(),type:"triangle",name:cfg.name,fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor,vertices:verts});
-      }
+      clickVerts.current=[...clickVerts.current,latlng];
+      const needed=ZONE_CLICKS[cfg.type]||2;
+      if(clickVerts.current.length>=needed){
+        const verts=[...clickVerts.current];
+        clickVerts.current=[];cursorPos.current=null;
+        previewLayerRef.current.clearLayers();
+        const id=Date.now();
+        const base={id,name:cfg.name,comune:cfg.comune||"",materiale:cfg.materiale||"",sector:cfg.sector||"",fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor};
+        if(cfg.type==="circle"){ const radius=L.latLng(verts[0]).distanceTo(L.latLng(verts[1])); cbComplete.current({...base,type:"circle",center:verts[0],radius}); }
+        else if(cfg.type==="square"){ cbComplete.current({...base,type:"square",bounds:verts}); }
+        else{ cbComplete.current({...base,type:cfg.type,vertices:verts}); }
+      }else{ refreshPreview(); }
     });
 
     mapRef.current=map;
@@ -468,14 +458,12 @@ function ZoneMap({zones,drawMode,zoneConfig,onShapeComplete,onZoneDelete}){
     zones.forEach(z=>{
       const style={fillColor:z.fillColor,fillOpacity:z.fillOpacity,color:z.borderColor,weight:2,opacity:1};
       let shape;
-      if(z.type==="circle") shape=L.circle(z.center,{radius:z.radius,...style});
-      else if(z.type==="square") shape=L.rectangle(z.bounds,style);
-      else if(z.type==="triangle") shape=L.polygon(z.vertices,style);
-      if(shape){
-        if(z.name)shape.bindTooltip(z.name,{sticky:false});
-        shape.on("click",(e)=>{ L.DomEvent.stopPropagation(e); if(window.confirm(`Eliminare "${z.name||z.type}"?`))cbDel.current(z.id); });
-        zoneLayerRef.current.addLayer(shape);
-      }
+      if(z.type==="circle")shape=L.circle(z.center,{radius:z.radius,...style});
+      else if(z.type==="square")shape=L.rectangle(z.bounds,style);
+      else shape=L.polygon(z.vertices,style);
+      if(z.name)shape.bindTooltip(z.name,{sticky:false});
+      shape.on("click",(e)=>{L.DomEvent.stopPropagation(e);if(window.confirm(`Eliminare "${z.name||z.type}"?`))cbDel.current(z.id);});
+      zoneLayerRef.current.addLayer(shape);
     });
   },[zones]);
 
@@ -514,9 +502,10 @@ function PuntiMap({punti,drawMode,onMapClick,onPuntoDelete}){
       const m=L.marker([p.lat,p.lng],{
         icon:L.divIcon({className:"",html:`<div style="width:20px;height:20px;background:${p.color};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;cursor:pointer;"></div>`,iconSize:[20,20],iconAnchor:[10,10]}),
       });
-      const lbl=p.label?`<b style="font-size:13px">${p.label}</b><br>`:"";
-      m.bindPopup(`<div style="font-family:system-ui;min-width:120px">${lbl}<span style="font-size:11px;color:#666">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><br><button onclick="window._delPunto(${p.id})" style="margin-top:6px;font-size:11px;padding:3px 8px;background:#fee;border:1px solid #fcc;border-radius:4px;cursor:pointer;color:#c00">Elimina</button></div>`);
-      if(p.label)m.bindTooltip(p.label);
+      const lbl=p.nome?`<b style="font-size:13px">${p.nome}</b><br>`:"";
+      const sub=[p.comune,p.materiale,p.sector].filter(Boolean).join(" · ");
+      m.bindPopup(`<div style="font-family:system-ui;min-width:130px">${lbl}${sub?`<div style="font-size:11px;color:#888;margin-bottom:4px">${sub}</div>`:""}<span style="font-size:11px;color:#666">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><br><button onclick="window._delPunto(${p.id})" style="margin-top:6px;font-size:11px;padding:3px 8px;background:#fee;border:1px solid #fcc;border-radius:4px;cursor:pointer;color:#c00">Elimina</button></div>`);
+      if(p.nome)m.bindTooltip(p.nome);
       layerRef.current.addLayer(m);
     });
     window._delPunto=(id)=>{ if(cbDel.current)cbDel.current(id); };
@@ -529,8 +518,8 @@ function PuntiMap({punti,drawMode,onMapClick,onPuntoDelete}){
 // ─── GPS MODULE ───────────────────────────────────────────────────────────────
 const EMPTY_META={name:"",color:"#4ade80",opacity:0.85,comune:"",materiale:"",sector:""};
 
-const EMPTY_ZONE_CFG={type:"circle",name:"",fillColor:"#60a5fa",fillOpacity:0.3,borderColor:"#3a7bd5",radius:200};
-const EMPTY_PUNTO_CFG={label:"",color:"#f87171"};
+const EMPTY_ZONE_CFG={type:"circle",name:"",comune:"",materiale:"",sector:"",fillColor:"#60a5fa",fillOpacity:0.3,borderColor:"#3a7bd5"};
+const EMPTY_PUNTO_CFG={nome:"",comune:"",materiale:"",sector:"",color:"#f87171"};
 
 function GPSModule({onSelectVehicle}){
   const {auth}=useAuth();
@@ -565,7 +554,7 @@ function GPSModule({onSelectVehicle}){
     if(!drawingPunti)return;
     setPuntoCfg(cfg=>{
       const id=Date.now();
-      setPunti(prev=>[...prev,{id,lat:latlng[0],lng:latlng[1],label:cfg.label,color:cfg.color}]);
+      setPunti(prev=>[...prev,{id,lat:latlng[0],lng:latlng[1],nome:cfg.nome,comune:cfg.comune,materiale:cfg.materiale,sector:cfg.sector,color:cfg.color}]);
       return cfg;
     });
   },[drawingPunti]);
@@ -714,8 +703,11 @@ function GPSModule({onSelectVehicle}){
                 {punti.map(p=>(
                   <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                     <div style={{width:12,height:12,borderRadius:"50%",background:p.color,flexShrink:0,border:"2px solid #fff"}}/>
-                    <span style={{fontSize:12,color:T.text,flex:1}}>{p.label||"—"}</span>
-                    <span style={{fontSize:9,color:T.textDim,fontFamily:T.mono}}>{p.lat.toFixed(3)},{p.lng.toFixed(3)}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12,color:T.text,fontWeight:600}}>{p.nome||"—"}</div>
+                      {(p.comune||p.materiale)&&<div style={{fontSize:10,color:T.textDim}}>{[p.comune,p.materiale].filter(Boolean).join(" · ")}</div>}
+                    </div>
+                    <span style={{fontSize:9,color:T.textDim,fontFamily:T.mono}}>{p.lat.toFixed(3)}</span>
                   </div>
                 ))}
                 <div style={{marginTop:6,paddingTop:6,borderTop:`1px solid ${T.border}`,fontSize:10,color:T.textDim}}>Click punto sulla mappa → popup</div>
@@ -748,83 +740,77 @@ function GPSModule({onSelectVehicle}){
 
         {/* ── EDITOR ZONE sidebar ── */}
         {tab==="zone"&&(
-          <div style={{width:280,display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flexShrink:0}}>
+          <div style={{width:274,display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flexShrink:0}}>
             <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
               <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:14}}>Nuova zona</div>
 
-              {/* shape type */}
-              <div style={{marginBottom:12}}>
+              {/* text fields — same as percorsi */}
+              {[["Nome","name"],["Comune","comune"],["Materiale","materiale"],["Settore","sector"]].map(([lbl,key])=>(
+                <div key={key} style={{marginBottom:11}}>
+                  <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>{lbl}</div>
+                  <input value={zoneCfg[key]||""} onChange={e=>setZoneCfg(c=>({...c,[key]:e.target.value}))} style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"7px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+              ))}
+
+              {/* shape selector */}
+              <div style={{marginBottom:11}}>
                 <div style={{fontSize:11,color:T.textSub,marginBottom:6,fontWeight:600}}>Forma</div>
-                <div style={{display:"flex",gap:6}}>
-                  {["circle","square","triangle"].map(s=>(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+                  {[["circle","○ Cerchio","2 click"],["square","□ Rettangolo","2 click"],["triangle","△ Triangolo","3 click"],["parallelogram","⬡ Quadrilatero","4 click"]].map(([s,label,hint])=>(
                     <button key={s} onClick={()=>setZoneCfg(c=>({...c,type:s}))}
-                      style={{flex:1,padding:"7px 4px",background:zoneCfg.type===s?T.navActive:"transparent",border:`1px solid ${zoneCfg.type===s?T.blue+"66":T.border}`,borderRadius:7,color:zoneCfg.type===s?T.blue:T.textSub,cursor:"pointer",fontSize:11,fontFamily:T.font,fontWeight:600}}>
-                      {s==="circle"?"○ Cerchio":s==="square"?"□ Quadrato":"△ Triangolo"}
+                      style={{padding:"7px 6px",background:zoneCfg.type===s?T.navActive:"transparent",border:`1px solid ${zoneCfg.type===s?T.blue+"66":T.border}`,borderRadius:7,color:zoneCfg.type===s?T.blue:T.textSub,cursor:"pointer",fontSize:11,fontFamily:T.font,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                      <span>{label}</span><span style={{fontSize:9,opacity:0.6,fontWeight:400}}>{hint}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* name */}
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Nome</div>
-                <input value={zoneCfg.name} onChange={e=>setZoneCfg(c=>({...c,name:e.target.value}))}
-                  placeholder="es. Zona nord" style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"8px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
-              </div>
-
-              {/* radius (circle only) */}
-              {zoneCfg.type==="circle"&&(
-                <div style={{marginBottom:12}}>
-                  <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Raggio: {zoneCfg.radius} m</div>
-                  <input type="range" min={50} max={2000} step={50} value={zoneCfg.radius}
-                    onChange={e=>setZoneCfg(c=>({...c,radius:Number(e.target.value)}))}
-                    style={{width:"100%",accentColor:T.blue}}/>
-                </div>
-              )}
-
-              {/* fill color + opacity */}
-              <div style={{display:"flex",gap:10,marginBottom:12}}>
+              {/* fill + border colors */}
+              <div style={{display:"flex",gap:10,marginBottom:11}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Riempimento</div>
-                  <input type="color" value={zoneCfg.fillColor} onChange={e=>setZoneCfg(c=>({...c,fillColor:e.target.value}))}
-                    style={{width:"100%",height:34,border:"none",borderRadius:6,cursor:"pointer",background:"none",padding:2}}/>
+                  <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:5}}>
+                    {["#60a5fa","#4ade80","#fb923c","#f87171","#c084fc","#facc15","#34d399","#f9a8d4"].map(c=>(
+                      <div key={c} onClick={()=>setZoneCfg(z=>({...z,fillColor:c}))} style={{width:18,height:18,borderRadius:"50%",background:c,cursor:"pointer",border:zoneCfg.fillColor===c?"2px solid #fff":"1px solid transparent",flexShrink:0}}/>
+                    ))}
+                  </div>
+                  <input type="color" value={zoneCfg.fillColor} onChange={e=>setZoneCfg(c=>({...c,fillColor:e.target.value}))} style={{width:"100%",height:30,border:"none",borderRadius:5,cursor:"pointer",background:"none",padding:2}}/>
                 </div>
                 <div style={{flex:1}}>
                   <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Bordo</div>
-                  <input type="color" value={zoneCfg.borderColor} onChange={e=>setZoneCfg(c=>({...c,borderColor:e.target.value}))}
-                    style={{width:"100%",height:34,border:"none",borderRadius:6,cursor:"pointer",background:"none",padding:2}}/>
+                  <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:5}}>
+                    {["#3a7bd5","#22c55e","#f97316","#ef4444","#a855f7","#eab308","#10b981","#ec4899"].map(c=>(
+                      <div key={c} onClick={()=>setZoneCfg(z=>({...z,borderColor:c}))} style={{width:18,height:18,borderRadius:"50%",background:c,cursor:"pointer",border:zoneCfg.borderColor===c?"2px solid #fff":"1px solid transparent",flexShrink:0}}/>
+                    ))}
+                  </div>
+                  <input type="color" value={zoneCfg.borderColor} onChange={e=>setZoneCfg(c=>({...c,borderColor:e.target.value}))} style={{width:"100%",height:30,border:"none",borderRadius:5,cursor:"pointer",background:"none",padding:2}}/>
                 </div>
               </div>
 
-              {/* fill opacity */}
-              <div style={{marginBottom:16}}>
+              {/* opacity */}
+              <div style={{marginBottom:12}}>
                 <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Trasparenza riempimento: {Math.round(zoneCfg.fillOpacity*100)}%</div>
                 <input type="range" min={0} max={100} step={5} value={Math.round(zoneCfg.fillOpacity*100)}
                   onChange={e=>setZoneCfg(c=>({...c,fillOpacity:Number(e.target.value)/100}))}
-                  style={{width:"100%",accentColor:T.blue}}/>
+                  style={{width:"100%",accentColor:zoneCfg.fillColor}}/>
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:T.textDim,marginTop:2}}><span>Trasparente</span><span>Pieno</span></div>
               </div>
 
-              {/* preview */}
-              <div style={{marginBottom:14,height:28,borderRadius:6,background:zoneCfg.fillColor,opacity:zoneCfg.fillOpacity===0?0.05:zoneCfg.fillOpacity,border:`2px solid ${zoneCfg.borderColor}`}}/>
+              {/* preview strip */}
+              <div style={{marginBottom:12,height:24,borderRadius:6,background:zoneCfg.fillColor,opacity:Math.max(zoneCfg.fillOpacity,0.05),border:`2px solid ${zoneCfg.borderColor}`}}/>
 
-              {/* instructions */}
+              {/* instruction */}
               <div style={{fontSize:11,color:T.textDim,marginBottom:12,padding:"8px 10px",background:T.bg,borderRadius:6,border:`1px solid ${T.border}`,lineHeight:1.6}}>
-                {zoneCfg.type==="circle"&&"Tieni premuto e trascina per definire il raggio"}
-                {zoneCfg.type==="square"&&"Tieni premuto e trascina per definire l'area"}
-                {zoneCfg.type==="triangle"&&"3 click sulla mappa per i 3 vertici"}
+                {zoneCfg.type==="circle"&&"Click 1 = centro · Click 2 = bordo del cerchio"}
+                {zoneCfg.type==="square"&&"Click 1 = angolo A · Click 2 = angolo B"}
+                {zoneCfg.type==="triangle"&&"3 click per i 3 vertici del triangolo"}
+                {zoneCfg.type==="parallelogram"&&"4 click per i 4 vertici del quadrilatero"}
               </div>
 
               <div style={{display:"flex",gap:8}}>
                 {!drawingZone
-                  ? <button onClick={()=>{setDrawingZone(true);setPendingVerts([]);}}
-                      style={{flex:1,padding:"9px",background:T.navActive,border:`1px solid ${T.blue+"66"}`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
-                      + Disegna zona
-                    </button>
-                  : <button onClick={cancelZoneDraw}
-                      style={{flex:1,padding:"9px",background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:7,color:T.red,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
-                      ✕ Annulla
-                    </button>
+                  ?<button onClick={()=>setDrawingZone(true)} style={{flex:1,padding:"9px",background:T.navActive,border:`1px solid ${T.blue+"66"}`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Disegna zona</button>
+                  :<button onClick={cancelZoneDraw} style={{flex:1,padding:"9px",background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:7,color:T.red,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>✕ Annulla</button>
                 }
               </div>
             </div>
@@ -834,11 +820,14 @@ function GPSModule({onSelectVehicle}){
               <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
                 <div style={{fontSize:11,color:T.textSub,textTransform:"uppercase",letterSpacing:0.8,fontWeight:700,marginBottom:10}}>Zone salvate ({zones.length})</div>
                 {zones.map(z=>(
-                  <div key={z.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7,padding:"7px 10px",background:T.bg,borderRadius:7,border:`1px solid ${T.border}`}}>
-                    <div style={{width:14,height:14,borderRadius:z.type==="circle"?"50%":z.type==="square"?"2px":"0",background:z.fillColor,opacity:Math.max(z.fillOpacity,0.4),border:`2px solid ${z.borderColor}`,flexShrink:0,clipPath:z.type==="triangle"?"polygon(50% 0%,0% 100%,100% 100%)":undefined}}/>
-                    <span style={{fontSize:12,color:T.text,flex:1}}>{z.name||z.type}</span>
-                    <span style={{fontSize:10,color:T.textDim}}>{z.type==="circle"?`${z.radius}m`:z.type==="square"?"rect":"tri"}</span>
-                    <button onClick={()=>deleteZone(z.id)} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1}}>×</button>
+                  <div key={z.id} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",marginBottom:7}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                      <div style={{width:12,height:12,borderRadius:z.type==="circle"?"50%":"2px",background:z.fillColor,opacity:Math.max(z.fillOpacity,0.4),border:`2px solid ${z.borderColor}`,flexShrink:0,clipPath:z.type==="triangle"?"polygon(50% 0%,0% 100%,100% 100%)":z.type==="parallelogram"?"polygon(25% 0%,100% 0%,75% 100%,0% 100%)":undefined}}/>
+                      <span style={{fontSize:12,fontWeight:600,color:T.text,flex:1}}>{z.name||z.type}</span>
+                      <span style={{fontSize:9,color:T.textDim,background:T.card,padding:"1px 6px",borderRadius:4}}>{z.type==="circle"?`${Math.round(z.radius)}m`:z.type}</span>
+                      <button onClick={()=>deleteZone(z.id)} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1}}>×</button>
+                    </div>
+                    {(z.comune||z.materiale||z.sector)&&<div style={{fontSize:10,color:T.textDim}}>{[z.comune,z.materiale,z.sector].filter(Boolean).join(" · ")}</div>}
                   </div>
                 ))}
               </div>
@@ -852,46 +841,44 @@ function GPSModule({onSelectVehicle}){
             <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
               <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:14}}>Nuovo punto</div>
 
-              {/* label */}
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Etichetta</div>
-                <input value={puntoCfg.label} onChange={e=>setPuntoCfg(c=>({...c,label:e.target.value}))}
-                  placeholder="es. Deposito nord" style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"8px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
-              </div>
+              {/* same fields as percorsi */}
+              {[["Nome","nome"],["Comune","comune"],["Materiale","materiale"],["Settore","sector"]].map(([lbl,key])=>(
+                <div key={key} style={{marginBottom:11}}>
+                  <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>{lbl}</div>
+                  <input value={puntoCfg[key]||""} onChange={e=>setPuntoCfg(c=>({...c,[key]:e.target.value}))} style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"7px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+              ))}
 
               {/* color */}
               <div style={{marginBottom:12}}>
                 <div style={{fontSize:11,color:T.textSub,marginBottom:6,fontWeight:600}}>Colore</div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:7}}>
                   {["#f87171","#fb923c","#facc15","#4ade80","#34d399","#60a5fa","#c084fc","#f9a8d4"].map(c=>(
                     <div key={c} onClick={()=>setPuntoCfg(p=>({...p,color:c}))}
-                      style={{width:24,height:24,borderRadius:"50%",background:c,cursor:"pointer",flexShrink:0,border:puntoCfg.color===c?"3px solid #fff":"2px solid transparent",boxShadow:puntoCfg.color===c?"0 0 0 1px #000":"none"}}/>
+                      style={{width:22,height:22,borderRadius:"50%",background:c,cursor:"pointer",flexShrink:0,border:puntoCfg.color===c?"3px solid #fff":"2px solid transparent",boxShadow:puntoCfg.color===c?"0 0 0 1px #000":"none"}}/>
                   ))}
                 </div>
                 <input type="color" value={puntoCfg.color} onChange={e=>setPuntoCfg(c=>({...c,color:e.target.value}))}
-                  style={{width:"100%",height:32,border:"none",borderRadius:6,cursor:"pointer",background:"none",padding:2}}/>
+                  style={{width:"100%",height:30,border:"none",borderRadius:5,cursor:"pointer",background:"none",padding:2}}/>
               </div>
 
               {/* preview */}
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,padding:"10px 12px",background:T.bg,borderRadius:7,border:`1px solid ${T.border}`}}>
-                <div style={{width:20,height:20,borderRadius:"50%",background:puntoCfg.color,border:"2px solid #fff",boxShadow:"0 2px 6px rgba(0,0,0,0.4)",flexShrink:0}}/>
-                <span style={{fontSize:12,color:T.text}}>{puntoCfg.label||"(senza etichetta)"}</span>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"9px 12px",background:T.bg,borderRadius:7,border:`1px solid ${T.border}`}}>
+                <div style={{width:18,height:18,borderRadius:"50%",background:puntoCfg.color,border:"2px solid #fff",boxShadow:"0 2px 6px rgba(0,0,0,0.4)",flexShrink:0}}/>
+                <div>
+                  <div style={{fontSize:12,color:T.text,fontWeight:600}}>{puntoCfg.nome||"(senza nome)"}</div>
+                  {(puntoCfg.comune||puntoCfg.materiale)&&<div style={{fontSize:10,color:T.textDim}}>{[puntoCfg.comune,puntoCfg.materiale].filter(Boolean).join(" · ")}</div>}
+                </div>
               </div>
 
               <div style={{fontSize:11,color:T.textDim,marginBottom:12,padding:"8px 10px",background:T.bg,borderRadius:6,border:`1px solid ${T.border}`,lineHeight:1.6}}>
-                {drawingPunti?"Click sulla mappa per aggiungere punti. Il modo rimane attivo.":"Clicca Aggiungi e poi sulla mappa."}
+                {drawingPunti?"Modalità attiva — click sulla mappa per aggiungere.":"Clicca Aggiungi poi sulla mappa."}
               </div>
 
               <div style={{display:"flex",gap:8}}>
                 {!drawingPunti
-                  ? <button onClick={()=>setDrawingPunti(true)}
-                      style={{flex:1,padding:"9px",background:T.navActive,border:`1px solid ${T.blue+"66"}`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
-                      + Aggiungi punti
-                    </button>
-                  : <button onClick={()=>setDrawingPunti(false)}
-                      style={{flex:1,padding:"9px",background:"#0d2010",border:`1px solid ${T.green+"55"}`,borderRadius:7,color:T.green,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
-                      ✓ Fine
-                    </button>
+                  ?<button onClick={()=>setDrawingPunti(true)} style={{flex:1,padding:"9px",background:T.navActive,border:`1px solid ${T.blue+"66"}`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Aggiungi punti</button>
+                  :<button onClick={()=>setDrawingPunti(false)} style={{flex:1,padding:"9px",background:"#0d2010",border:`1px solid ${T.green+"55"}`,borderRadius:7,color:T.green,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>✓ Fine</button>
                 }
               </div>
             </div>
@@ -904,11 +891,14 @@ function GPSModule({onSelectVehicle}){
                   <button onClick={()=>{ if(window.confirm("Eliminare tutti i punti?"))setPunti([]);}} style={{background:"none",border:"none",color:T.textDim,cursor:"pointer",fontSize:11,fontFamily:T.font}}>Cancella tutto</button>
                 </div>
                 {punti.map(p=>(
-                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"6px 10px",background:T.bg,borderRadius:7,border:`1px solid ${T.border}`}}>
-                    <div style={{width:12,height:12,borderRadius:"50%",background:p.color,flexShrink:0}}/>
-                    <span style={{fontSize:12,color:T.text,flex:1}}>{p.label||"—"}</span>
-                    <span style={{fontSize:9,color:T.textDim,fontFamily:T.mono}}>{p.lat.toFixed(3)},{p.lng.toFixed(3)}</span>
-                    <button onClick={()=>deletePunto(p.id)} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1}}>×</button>
+                  <div key={p.id} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",marginBottom:6}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:10,height:10,borderRadius:"50%",background:p.color,flexShrink:0}}/>
+                      <span style={{fontSize:12,fontWeight:600,color:T.text,flex:1}}>{p.nome||"—"}</span>
+                      <button onClick={()=>deletePunto(p.id)} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1}}>×</button>
+                    </div>
+                    {(p.comune||p.materiale||p.sector)&&<div style={{fontSize:10,color:T.textDim,marginTop:3,paddingLeft:18}}>{[p.comune,p.materiale,p.sector].filter(Boolean).join(" · ")}</div>}
+                    <div style={{fontSize:9,color:T.textDim,marginTop:2,paddingLeft:18,fontFamily:T.mono}}>{p.lat.toFixed(4)}, {p.lng.toFixed(4)}</div>
                   </div>
                 ))}
               </div>

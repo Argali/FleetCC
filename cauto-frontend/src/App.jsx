@@ -327,7 +327,7 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
     if(!mapRef.current||!routes||!routeLayerRef.current)return;
     routeLayerRef.current.clearLayers();
     routes.forEach(r=>{
-      const opacity=editMode?0.2:(visibleRoutes[r.id]?0.85:0);
+      const opacity=editMode?0.2:(visibleRoutes[r.id]?(r.opacity??0.85):0);
       if(opacity===0)return;
       const line=L.polyline(r.waypoints,{color:r.color,weight:4,opacity,dashArray:r.status==="pianificato"?"10 7":null});
       if(!editMode)line.bindTooltip(`<b>${r.name}</b><br>${r.vehicle} · ${r.stops} fermate`,{sticky:true});
@@ -367,24 +367,92 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
   return <div ref={containerRef} style={{height:"100%",width:"100%"}}/>;
 }
 
-// ─── ZONE MAP ─────────────────────────────────────────────────────────────────
-function ZoneMap({zones,drawMode,zoneConfig,pendingVerts,onMapClick,onZoneDelete}){
+// ─── ZONE MAP (drag-to-draw) ───────────────────────────────────────────────────
+function ZoneMap({zones,drawMode,zoneConfig,onShapeComplete,onZoneDelete}){
   const containerRef=useRef(null);
   const mapRef=useRef(null);
   const zoneLayerRef=useRef(null);
-  const pendingLayerRef=useRef(null);
-  const cbClick=useRef(onMapClick);
+  const previewLayerRef=useRef(null);
+  const cbComplete=useRef(onShapeComplete);
   const cbDel=useRef(onZoneDelete);
-  useEffect(()=>{cbClick.current=onMapClick;},[onMapClick]);
+  const cfgRef=useRef(zoneConfig);
+  const drawRef=useRef(drawMode);
+  const dragStart=useRef(null);
+  const dragging=useRef(false);
+  const triVerts=useRef([]);
+  useEffect(()=>{cbComplete.current=onShapeComplete;},[onShapeComplete]);
   useEffect(()=>{cbDel.current=onZoneDelete;},[onZoneDelete]);
+  useEffect(()=>{cfgRef.current=zoneConfig;},[zoneConfig]);
+  useEffect(()=>{
+    drawRef.current=drawMode;
+    if(!drawMode){ dragging.current=false; dragStart.current=null; triVerts.current=[]; if(previewLayerRef.current)previewLayerRef.current.clearLayers(); }
+  },[drawMode]);
 
   useEffect(()=>{
     if(!containerRef.current||mapRef.current)return;
     const map=L.map(containerRef.current,{center:[44.835,11.619],zoom:13});
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(map);
     zoneLayerRef.current=L.layerGroup().addTo(map);
-    pendingLayerRef.current=L.layerGroup().addTo(map);
-    map.on("click",(e)=>{ if(cbClick.current)cbClick.current([e.latlng.lat,e.latlng.lng]); });
+    previewLayerRef.current=L.layerGroup().addTo(map);
+
+    map.on("mousedown",(e)=>{
+      if(!drawRef.current)return;
+      const cfg=cfgRef.current;
+      if(cfg.type==="triangle")return;
+      L.DomEvent.stopPropagation(e);
+      dragStart.current=[e.latlng.lat,e.latlng.lng];
+      dragging.current=true;
+    });
+
+    map.on("mousemove",(e)=>{
+      if(!dragging.current||!dragStart.current)return;
+      const cfg=cfgRef.current;
+      const prev=previewLayerRef.current;
+      prev.clearLayers();
+      const style={fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity*0.6,color:cfg.borderColor,weight:2,opacity:0.8,dashArray:"6 4"};
+      if(cfg.type==="circle"){
+        const r=L.latLng(dragStart.current).distanceTo(e.latlng);
+        L.circle(dragStart.current,{radius:r,...style}).addTo(prev);
+        L.circleMarker(dragStart.current,{radius:5,fillColor:cfg.borderColor,fillOpacity:1,color:"#fff",weight:1}).addTo(prev);
+      }else if(cfg.type==="square"){
+        L.rectangle([dragStart.current,[e.latlng.lat,e.latlng.lng]],style).addTo(prev);
+      }
+    });
+
+    map.on("mouseup",(e)=>{
+      if(!dragging.current||!dragStart.current)return;
+      dragging.current=false;
+      const cfg=cfgRef.current;
+      previewLayerRef.current.clearLayers();
+      const id=Date.now();
+      if(cfg.type==="circle"){
+        const radius=L.latLng(dragStart.current).distanceTo(e.latlng);
+        if(radius>5)cbComplete.current({id,type:"circle",name:cfg.name,fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor,center:dragStart.current,radius});
+      }else if(cfg.type==="square"){
+        cbComplete.current({id,type:"square",name:cfg.name,fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor,bounds:[dragStart.current,[e.latlng.lat,e.latlng.lng]]});
+      }
+      dragStart.current=null;
+    });
+
+    map.on("click",(e)=>{
+      if(!drawRef.current)return;
+      const cfg=cfgRef.current;
+      if(cfg.type!=="triangle")return;
+      const latlng=[e.latlng.lat,e.latlng.lng];
+      triVerts.current=[...triVerts.current,latlng];
+      const prev=previewLayerRef.current;
+      L.circleMarker(latlng,{radius:6,fillColor:cfg.borderColor,fillOpacity:1,color:"#fff",weight:1.5})
+        .bindTooltip(`${triVerts.current.length}`).addTo(prev);
+      if(triVerts.current.length>=2)
+        L.polyline(triVerts.current,{color:cfg.borderColor,weight:2,dashArray:"6 4"}).addTo(prev);
+      if(triVerts.current.length===3){
+        const verts=[...triVerts.current];
+        triVerts.current=[];
+        prev.clearLayers();
+        cbComplete.current({id:Date.now(),type:"triangle",name:cfg.name,fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor,vertices:verts});
+      }
+    });
+
     mapRef.current=map;
     return()=>{map.remove();mapRef.current=null;};
   },[]);
@@ -405,27 +473,11 @@ function ZoneMap({zones,drawMode,zoneConfig,pendingVerts,onMapClick,onZoneDelete
       else if(z.type==="triangle") shape=L.polygon(z.vertices,style);
       if(shape){
         if(z.name)shape.bindTooltip(z.name,{sticky:false});
-        shape.on("click",(e)=>{ L.DomEvent.stopPropagation(e); if(window.confirm(`Eliminare zona "${z.name||z.type}"?`))cbDel.current(z.id); });
+        shape.on("click",(e)=>{ L.DomEvent.stopPropagation(e); if(window.confirm(`Eliminare "${z.name||z.type}"?`))cbDel.current(z.id); });
         zoneLayerRef.current.addLayer(shape);
       }
     });
   },[zones]);
-
-  useEffect(()=>{
-    if(!mapRef.current||!pendingLayerRef.current)return;
-    pendingLayerRef.current.clearLayers();
-    if(!pendingVerts||pendingVerts.length===0)return;
-    const bc=zoneConfig.borderColor;
-    pendingVerts.forEach((v,i)=>{
-      L.circleMarker(v,{radius:6,fillColor:bc,fillOpacity:1,color:"#fff",weight:1.5}).bindTooltip(`${i+1}`).addTo(pendingLayerRef.current);
-    });
-    if(zoneConfig.type==="triangle"&&pendingVerts.length>=2){
-      L.polyline(pendingVerts,{color:bc,weight:2,dashArray:"6 4"}).addTo(pendingLayerRef.current);
-    }
-    if(zoneConfig.type==="square"&&pendingVerts.length>=2){
-      L.rectangle([pendingVerts[0],pendingVerts[1]],{color:bc,weight:2,dashArray:"6 4",fill:false}).addTo(pendingLayerRef.current);
-    }
-  },[pendingVerts,zoneConfig]);
 
   return <div ref={containerRef} style={{height:"100%",width:"100%"}}/>;
 }
@@ -475,7 +527,7 @@ function PuntiMap({punti,drawMode,onMapClick,onPuntoDelete}){
 }
 
 // ─── GPS MODULE ───────────────────────────────────────────────────────────────
-const EMPTY_META={name:"",color:"#4ade80",sector:"",vehicle:"",status:"pianificato",stops:0};
+const EMPTY_META={name:"",color:"#4ade80",opacity:0.85,comune:"",materiale:"",sector:""};
 
 const EMPTY_ZONE_CFG={type:"circle",name:"",fillColor:"#60a5fa",fillOpacity:0.3,borderColor:"#3a7bd5",radius:200};
 const EMPTY_PUNTO_CFG={label:"",color:"#f87171"};
@@ -495,48 +547,13 @@ function GPSModule({onSelectVehicle}){
   // ── zone editor state ─────────────────────────────────────────────────────
   const [zones,setZones]=useState(()=>{ try{return JSON.parse(localStorage.getItem("fleetcc_zones")||"[]");}catch{return[];} });
   const [zoneCfg,setZoneCfg]=useState(EMPTY_ZONE_CFG);
-  const [pendingVerts,setPendingVerts]=useState([]);
   const [drawingZone,setDrawingZone]=useState(false);
+  const [legendOpen,setLegendOpen]=useState({live:true,zone:true,punti:true});
   useEffect(()=>{ localStorage.setItem("fleetcc_zones",JSON.stringify(zones)); },[zones]);
 
-  const handleZoneMapClick=useCallback((latlng)=>{
-    if(!drawingZone)return;
-    setZoneCfg(cfg=>{
-      if(cfg.type==="circle"){
-        const id=Date.now();
-        setZones(prev=>[...prev,{id,type:"circle",name:cfg.name,fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor,center:latlng,radius:Number(cfg.radius)}]);
-        setDrawingZone(false);
-        return cfg;
-      }
-      if(cfg.type==="square"){
-        setPendingVerts(prev=>{
-          if(prev.length===0)return[latlng];
-          const id=Date.now();
-          setZones(zs=>[...zs,{id,type:"square",name:cfg.name,fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor,bounds:[prev[0],latlng]}]);
-          setDrawingZone(false);
-          return[];
-        });
-        return cfg;
-      }
-      if(cfg.type==="triangle"){
-        setPendingVerts(prev=>{
-          const next=[...prev,latlng];
-          if(next.length===3){
-            const id=Date.now();
-            setZones(zs=>[...zs,{id,type:"triangle",name:cfg.name,fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor,vertices:next}]);
-            setDrawingZone(false);
-            return[];
-          }
-          return next;
-        });
-        return cfg;
-      }
-      return cfg;
-    });
-  },[drawingZone]);
-
+  const handleShapeComplete=useCallback((shape)=>{ setZones(prev=>[...prev,shape]); setDrawingZone(false); },[]);
   const deleteZone=useCallback((id)=>setZones(prev=>prev.filter(z=>z.id!==id)),[]);
-  const cancelZoneDraw=()=>{ setDrawingZone(false); setPendingVerts([]); };
+  const cancelZoneDraw=()=>setDrawingZone(false);
 
   // ── punti editor state ───────────────────────────────────────────────────
   const [punti,setPunti]=useState(()=>{ try{return JSON.parse(localStorage.getItem("fleetcc_punti")||"[]");}catch{return[];} });
@@ -565,7 +582,7 @@ function GPSModule({onSelectVehicle}){
   useEffect(()=>{loadRoutes();},[loadRoutes]);
 
   const toggleRoute=(id)=>setVisibleRoutes(prev=>({...prev,[id]:!prev[id]}));
-  const startEdit=(r)=>{setEditingId(r.id);setEditWaypoints(r.waypoints.map(wp=>[...wp]));setMeta({name:r.name,color:r.color,sector:r.sector||"",vehicle:r.vehicle||"",status:r.status,stops:r.stops||0});};
+  const startEdit=(r)=>{setEditingId(r.id);setEditWaypoints(r.waypoints.map(wp=>[...wp]));setMeta({name:r.name,color:r.color,opacity:r.opacity??0.85,comune:r.comune||"",materiale:r.materiale||"",sector:r.sector||""});};
   const startNew=()=>{setEditingId("new");setEditWaypoints([]);setMeta({...EMPTY_META});};
   const cancelEdit=()=>{setEditingId(null);setEditWaypoints([]);setMeta(EMPTY_META);};
   const handleMapClick=useCallback((latlng)=>{ if(editingId!==null)setEditWaypoints(prev=>[...prev,latlng]); },[editingId]);
@@ -576,7 +593,7 @@ function GPSModule({onSelectVehicle}){
     if(!meta.name.trim()||editWaypoints.length<2)return;
     setSaving(true);
     try{
-      const body={...meta,waypoints:editWaypoints,stops:Number(meta.stops)};
+      const body={...meta,waypoints:editWaypoints,opacity:Number(meta.opacity)};
       const url=editingId==="new"?`${API}/gps/routes`:`${API}/gps/routes/${editingId}`;
       const method=editingId==="new"?"POST":"PUT";
       const d=await(await fetch(url,{method,headers:{Authorization:`Bearer ${auth.token}`,"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
@@ -626,9 +643,9 @@ function GPSModule({onSelectVehicle}){
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                   <div style={{width:12,height:12,borderRadius:"50%",background:r.color,flexShrink:0}}/>
                   <span style={{fontSize:13,fontWeight:600,color:T.text,flex:1}}>{r.name}</span>
-                  <span style={{fontSize:9,color:r.status==="in_corso"?T.green:T.blue,background:r.status==="in_corso"?"#0d2e0d":"#0a1e30",padding:"2px 6px",borderRadius:4,fontWeight:600}}>{r.status==="in_corso"?"In corso":"Pianif."}</span>
+                  <span style={{fontSize:9,color:T.textDim,background:T.bg,padding:"2px 6px",borderRadius:4}}>{Math.round((r.opacity??0.85)*100)}%</span>
                 </div>
-                <div style={{fontSize:11,color:T.textSub,marginBottom:10}}>{r.vehicle||"—"} · {r.waypoints.length} punti · {r.stops} fermate</div>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:10}}>{[r.comune,r.materiale,r.sector].filter(Boolean).join(" · ")||"—"} · {r.waypoints.length} pt</div>
                 <div style={{display:"flex",gap:6}}>
                   {canEdit&&<button onClick={()=>startEdit(r)} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"5px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Modifica</button>}
                   {canEdit&&<button onClick={()=>deleteRoute(r.id)} style={{background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:6,color:T.red,padding:"5px 10px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Elimina</button>}
@@ -644,19 +661,65 @@ function GPSModule({onSelectVehicle}){
             editMode={editorActive} editWaypoints={editWaypoints} editColor={meta.color}
             onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onWaypointDelete={handleWaypointDelete}
           />}
-          {tab==="zone"&&<ZoneMap zones={zones} drawMode={drawingZone} zoneConfig={zoneCfg} pendingVerts={pendingVerts} onMapClick={handleZoneMapClick} onZoneDelete={deleteZone}/>}
+          {tab==="zone"&&<ZoneMap zones={zones} drawMode={drawingZone} zoneConfig={zoneCfg} onShapeComplete={handleShapeComplete} onZoneDelete={deleteZone}/>}
           {tab==="punti"&&<PuntiMap punti={punti} drawMode={drawingPunti} onMapClick={handlePuntiMapClick} onPuntoDelete={deletePunto}/>}
+          {/* ── floating legend: Percorsi ── */}
           {tab==="live"&&routes&&(
-            <div style={{position:"absolute",top:12,right:12,zIndex:1000,background:"rgba(13,27,42,0.95)",border:`1px solid ${T.border}`,borderRadius:10,padding:"12px 16px",minWidth:200,backdropFilter:"blur(8px)"}}>
-              <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:1,marginBottom:10,fontWeight:600}}>Percorsi raccolta</div>
-              {routes.map(r=>(
-                <div key={r.id} onClick={()=>toggleRoute(r.id)} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7,cursor:"pointer",opacity:visibleRoutes[r.id]?1:0.35,transition:"opacity 0.15s"}}>
-                  <div style={{width:24,height:3,background:r.color,borderRadius:2,flexShrink:0}}/>
-                  <span style={{fontSize:12,color:T.text,flex:1}}>{r.name}</span>
-                  <span style={{fontSize:9,color:r.status==="in_corso"?T.green:T.blue,padding:"1px 6px",borderRadius:3,fontWeight:600,background:r.status==="in_corso"?"#0d2e0d":"#0a1e30"}}>{r.status==="in_corso"?"In corso":"Pianif."}</span>
-                </div>
-              ))}
-              <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${T.border}`,fontSize:10,color:T.textDim}}>Click per mostrare/nascondere</div>
+            <div style={{position:"absolute",top:12,right:12,zIndex:1000,background:"rgba(13,27,42,0.82)",border:`1px solid ${T.border}`,borderRadius:10,minWidth:200,backdropFilter:"blur(8px)",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
+              <div onClick={()=>setLegendOpen(o=>({...o,live:!o.live}))} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",cursor:"pointer",userSelect:"none"}}>
+                <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:1,fontWeight:700,flex:1}}>Percorsi raccolta ({routes.length})</div>
+                <span style={{fontSize:14,color:T.textDim,lineHeight:1}}>{legendOpen.live?"▲":"▼"}</span>
+              </div>
+              {legendOpen.live&&<div style={{padding:"0 14px 12px"}}>
+                {routes.map(r=>(
+                  <div key={r.id} onClick={()=>toggleRoute(r.id)} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7,cursor:"pointer",opacity:visibleRoutes[r.id]?1:0.35,transition:"opacity 0.15s"}}>
+                    <div style={{width:24,height:3,background:r.color,borderRadius:2,flexShrink:0}}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12,color:T.text,fontWeight:600}}>{r.name}</div>
+                      {(r.comune||r.materiale)&&<div style={{fontSize:10,color:T.textDim}}>{[r.comune,r.materiale].filter(Boolean).join(" · ")}</div>}
+                    </div>
+                  </div>
+                ))}
+                <div style={{marginTop:6,paddingTop:6,borderTop:`1px solid ${T.border}`,fontSize:10,color:T.textDim}}>Click per mostrare/nascondere</div>
+              </div>}
+            </div>
+          )}
+          {/* ── floating legend: Zone ── */}
+          {tab==="zone"&&zones.length>0&&(
+            <div style={{position:"absolute",top:12,right:12,zIndex:1000,background:"rgba(13,27,42,0.82)",border:`1px solid ${T.border}`,borderRadius:10,minWidth:190,backdropFilter:"blur(8px)",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
+              <div onClick={()=>setLegendOpen(o=>({...o,zone:!o.zone}))} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",cursor:"pointer",userSelect:"none"}}>
+                <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:1,fontWeight:700,flex:1}}>Zone ({zones.length})</div>
+                <span style={{fontSize:14,color:T.textDim,lineHeight:1}}>{legendOpen.zone?"▲":"▼"}</span>
+              </div>
+              {legendOpen.zone&&<div style={{padding:"0 14px 12px"}}>
+                {zones.map(z=>(
+                  <div key={z.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <div style={{width:14,height:14,flexShrink:0,background:z.fillColor,opacity:Math.max(z.fillOpacity,0.35),border:`2px solid ${z.borderColor}`,borderRadius:z.type==="circle"?"50%":"2px",clipPath:z.type==="triangle"?"polygon(50% 0%,0% 100%,100% 100%)":undefined}}/>
+                    <span style={{fontSize:12,color:T.text,flex:1}}>{z.name||z.type}</span>
+                    <span style={{fontSize:10,color:T.textDim}}>{z.type==="circle"?`${Math.round(z.radius)}m`:z.type}</span>
+                  </div>
+                ))}
+                <div style={{marginTop:6,paddingTop:6,borderTop:`1px solid ${T.border}`,fontSize:10,color:T.textDim}}>Click zona sulla mappa → elimina</div>
+              </div>}
+            </div>
+          )}
+          {/* ── floating legend: Punti ── */}
+          {tab==="punti"&&punti.length>0&&(
+            <div style={{position:"absolute",top:12,right:12,zIndex:1000,background:"rgba(13,27,42,0.82)",border:`1px solid ${T.border}`,borderRadius:10,minWidth:190,backdropFilter:"blur(8px)",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
+              <div onClick={()=>setLegendOpen(o=>({...o,punti:!o.punti}))} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",cursor:"pointer",userSelect:"none"}}>
+                <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:1,fontWeight:700,flex:1}}>Punti ({punti.length})</div>
+                <span style={{fontSize:14,color:T.textDim,lineHeight:1}}>{legendOpen.punti?"▲":"▼"}</span>
+              </div>
+              {legendOpen.punti&&<div style={{padding:"0 14px 12px"}}>
+                {punti.map(p=>(
+                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <div style={{width:12,height:12,borderRadius:"50%",background:p.color,flexShrink:0,border:"2px solid #fff"}}/>
+                    <span style={{fontSize:12,color:T.text,flex:1}}>{p.label||"—"}</span>
+                    <span style={{fontSize:9,color:T.textDim,fontFamily:T.mono}}>{p.lat.toFixed(3)},{p.lng.toFixed(3)}</span>
+                  </div>
+                ))}
+                <div style={{marginTop:6,paddingTop:6,borderTop:`1px solid ${T.border}`,fontSize:10,color:T.textDim}}>Click punto sulla mappa → popup</div>
+              </div>}
             </div>
           )}
           {tab==="live"&&<div style={{position:"absolute",bottom:10,left:10,zIndex:1000,fontSize:10,color:T.textSub,fontFamily:T.mono,background:"rgba(13,27,42,0.85)",padding:"4px 10px",borderRadius:6}}>Aggiornamento ogni 10s · Visirun mock</div>}
@@ -747,9 +810,9 @@ function GPSModule({onSelectVehicle}){
 
               {/* instructions */}
               <div style={{fontSize:11,color:T.textDim,marginBottom:12,padding:"8px 10px",background:T.bg,borderRadius:6,border:`1px solid ${T.border}`,lineHeight:1.6}}>
-                {zoneCfg.type==="circle"&&"Click sulla mappa → posiziona il cerchio"}
-                {zoneCfg.type==="square"&&"1° click → angolo 1 · 2° click → angolo 2"}
-                {zoneCfg.type==="triangle"&&`3 click per i vertici · Fatti: ${pendingVerts.length}/3`}
+                {zoneCfg.type==="circle"&&"Tieni premuto e trascina per definire il raggio"}
+                {zoneCfg.type==="square"&&"Tieni premuto e trascina per definire l'area"}
+                {zoneCfg.type==="triangle"&&"3 click sulla mappa per i 3 vertici"}
               </div>
 
               <div style={{display:"flex",gap:8}}>
@@ -858,26 +921,28 @@ function GPSModule({onSelectVehicle}){
           <div style={{width:260,display:"flex",flexDirection:"column",gap:10,overflowY:"auto"}}>
             <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
               <div style={{fontSize:14,fontWeight:700,color:T.text,marginBottom:16}}>{editingId==="new"?"Nuovo percorso":"Modifica percorso"}</div>
-              {[["Nome","name","text"],["Veicolo","vehicle","text"],["Settore","sector","text"],["Fermate","stops","number"]].map(([lbl,key,type])=>(
+              {[["Nome","name"],["Comune","comune"],["Materiale","materiale"],["Settore","sector"]].map(([lbl,key])=>(
                 <div key={key} style={{marginBottom:12}}>
                   <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>{lbl}</div>
-                  <input type={type} value={meta[key]} onChange={e=>setMeta(m=>({...m,[key]:e.target.value}))} style={inp}/>
+                  <input value={meta[key]||""} onChange={e=>setMeta(m=>({...m,[key]:e.target.value}))} style={inp}/>
                 </div>
               ))}
               <div style={{marginBottom:12}}>
-                <div style={{fontSize:11,color:T.textSub,marginBottom:8,fontWeight:600}}>Colore</div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:6,fontWeight:600}}>Colore percorso</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
                   {["#4ade80","#60a5fa","#fb923c","#c084fc","#f9a8d4","#facc15","#f87171","#34d399"].map(c=>(
                     <div key={c} onClick={()=>setMeta(m=>({...m,color:c}))} style={{width:24,height:24,borderRadius:"50%",background:c,border:meta.color===c?"3px solid #fff":"2px solid transparent",cursor:"pointer",flexShrink:0,boxShadow:meta.color===c?"0 0 0 1px #000":"none"}}/>
                   ))}
                 </div>
+                <input type="color" value={meta.color} onChange={e=>setMeta(m=>({...m,color:e.target.value}))}
+                  style={{width:"100%",height:32,border:"none",borderRadius:6,cursor:"pointer",background:"none",padding:2}}/>
               </div>
               <div style={{marginBottom:16}}>
-                <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Stato</div>
-                <select value={meta.status} onChange={e=>setMeta(m=>({...m,status:e.target.value}))} style={inp}>
-                  <option value="pianificato">Pianificato</option>
-                  <option value="in_corso">In corso</option>
-                </select>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Trasparenza: {Math.round((meta.opacity??0.85)*100)}%</div>
+                <input type="range" min={10} max={100} step={5} value={Math.round((meta.opacity??0.85)*100)}
+                  onChange={e=>setMeta(m=>({...m,opacity:Number(e.target.value)/100}))}
+                  style={{width:"100%",accentColor:meta.color}}/>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:T.textDim,marginTop:2}}><span>Trasparente</span><span>Pieno</span></div>
               </div>
               <div style={{fontSize:11,color:T.textSub,marginBottom:14,padding:"10px 12px",background:T.bg,borderRadius:6,border:`1px solid ${T.border}`}}>
                 {editWaypoints.length} punti tracciati<br/><span style={{fontSize:10,color:T.textDim}}>Min. 2 punti per salvare</span>

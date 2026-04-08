@@ -367,8 +367,118 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
   return <div ref={containerRef} style={{height:"100%",width:"100%"}}/>;
 }
 
+// ─── ZONE MAP ─────────────────────────────────────────────────────────────────
+function ZoneMap({zones,drawMode,zoneConfig,pendingVerts,onMapClick,onZoneDelete}){
+  const containerRef=useRef(null);
+  const mapRef=useRef(null);
+  const zoneLayerRef=useRef(null);
+  const pendingLayerRef=useRef(null);
+  const cbClick=useRef(onMapClick);
+  const cbDel=useRef(onZoneDelete);
+  useEffect(()=>{cbClick.current=onMapClick;},[onMapClick]);
+  useEffect(()=>{cbDel.current=onZoneDelete;},[onZoneDelete]);
+
+  useEffect(()=>{
+    if(!containerRef.current||mapRef.current)return;
+    const map=L.map(containerRef.current,{center:[44.835,11.619],zoom:13});
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(map);
+    zoneLayerRef.current=L.layerGroup().addTo(map);
+    pendingLayerRef.current=L.layerGroup().addTo(map);
+    map.on("click",(e)=>{ if(cbClick.current)cbClick.current([e.latlng.lat,e.latlng.lng]); });
+    mapRef.current=map;
+    return()=>{map.remove();mapRef.current=null;};
+  },[]);
+
+  useEffect(()=>{
+    if(!mapRef.current)return;
+    mapRef.current.getContainer().style.cursor=drawMode?"crosshair":"";
+  },[drawMode]);
+
+  useEffect(()=>{
+    if(!mapRef.current||!zoneLayerRef.current)return;
+    zoneLayerRef.current.clearLayers();
+    zones.forEach(z=>{
+      const style={fillColor:z.fillColor,fillOpacity:z.fillOpacity,color:z.borderColor,weight:2,opacity:1};
+      let shape;
+      if(z.type==="circle") shape=L.circle(z.center,{radius:z.radius,...style});
+      else if(z.type==="square") shape=L.rectangle(z.bounds,style);
+      else if(z.type==="triangle") shape=L.polygon(z.vertices,style);
+      if(shape){
+        if(z.name)shape.bindTooltip(z.name,{sticky:false});
+        shape.on("click",(e)=>{ L.DomEvent.stopPropagation(e); if(window.confirm(`Eliminare zona "${z.name||z.type}"?`))cbDel.current(z.id); });
+        zoneLayerRef.current.addLayer(shape);
+      }
+    });
+  },[zones]);
+
+  useEffect(()=>{
+    if(!mapRef.current||!pendingLayerRef.current)return;
+    pendingLayerRef.current.clearLayers();
+    if(!pendingVerts||pendingVerts.length===0)return;
+    const bc=zoneConfig.borderColor;
+    pendingVerts.forEach((v,i)=>{
+      L.circleMarker(v,{radius:6,fillColor:bc,fillOpacity:1,color:"#fff",weight:1.5}).bindTooltip(`${i+1}`).addTo(pendingLayerRef.current);
+    });
+    if(zoneConfig.type==="triangle"&&pendingVerts.length>=2){
+      L.polyline(pendingVerts,{color:bc,weight:2,dashArray:"6 4"}).addTo(pendingLayerRef.current);
+    }
+    if(zoneConfig.type==="square"&&pendingVerts.length>=2){
+      L.rectangle([pendingVerts[0],pendingVerts[1]],{color:bc,weight:2,dashArray:"6 4",fill:false}).addTo(pendingLayerRef.current);
+    }
+  },[pendingVerts,zoneConfig]);
+
+  return <div ref={containerRef} style={{height:"100%",width:"100%"}}/>;
+}
+
+// ─── PUNTI MAP ────────────────────────────────────────────────────────────────
+function PuntiMap({punti,drawMode,onMapClick,onPuntoDelete}){
+  const containerRef=useRef(null);
+  const mapRef=useRef(null);
+  const layerRef=useRef(null);
+  const cbClick=useRef(onMapClick);
+  const cbDel=useRef(onPuntoDelete);
+  useEffect(()=>{cbClick.current=onMapClick;},[onMapClick]);
+  useEffect(()=>{cbDel.current=onPuntoDelete;},[onPuntoDelete]);
+
+  useEffect(()=>{
+    if(!containerRef.current||mapRef.current)return;
+    const map=L.map(containerRef.current,{center:[44.835,11.619],zoom:13});
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(map);
+    layerRef.current=L.layerGroup().addTo(map);
+    map.on("click",(e)=>{ if(cbClick.current)cbClick.current([e.latlng.lat,e.latlng.lng]); });
+    mapRef.current=map;
+    return()=>{map.remove();mapRef.current=null;};
+  },[]);
+
+  useEffect(()=>{
+    if(!mapRef.current)return;
+    mapRef.current.getContainer().style.cursor=drawMode?"crosshair":"";
+  },[drawMode]);
+
+  useEffect(()=>{
+    if(!mapRef.current||!layerRef.current)return;
+    layerRef.current.clearLayers();
+    punti.forEach(p=>{
+      const m=L.marker([p.lat,p.lng],{
+        icon:L.divIcon({className:"",html:`<div style="width:20px;height:20px;background:${p.color};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;cursor:pointer;"></div>`,iconSize:[20,20],iconAnchor:[10,10]}),
+      });
+      const lbl=p.label?`<b style="font-size:13px">${p.label}</b><br>`:"";
+      m.bindPopup(`<div style="font-family:system-ui;min-width:120px">${lbl}<span style="font-size:11px;color:#666">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><br><button onclick="window._delPunto(${p.id})" style="margin-top:6px;font-size:11px;padding:3px 8px;background:#fee;border:1px solid #fcc;border-radius:4px;cursor:pointer;color:#c00">Elimina</button></div>`);
+      if(p.label)m.bindTooltip(p.label);
+      layerRef.current.addLayer(m);
+    });
+    window._delPunto=(id)=>{ if(cbDel.current)cbDel.current(id); };
+    return()=>{ delete window._delPunto; };
+  },[punti]);
+
+  return <div ref={containerRef} style={{height:"100%",width:"100%"}}/>;
+}
+
 // ─── GPS MODULE ───────────────────────────────────────────────────────────────
 const EMPTY_META={name:"",color:"#4ade80",sector:"",vehicle:"",status:"pianificato",stops:0};
+
+const EMPTY_ZONE_CFG={type:"circle",name:"",fillColor:"#60a5fa",fillOpacity:0.3,borderColor:"#3a7bd5",radius:200};
+const EMPTY_PUNTO_CFG={label:"",color:"#f87171"};
 
 function GPSModule({onSelectVehicle}){
   const {auth}=useAuth();
@@ -381,6 +491,69 @@ function GPSModule({onSelectVehicle}){
   const [editWaypoints,setEditWaypoints]=useState([]);
   const [meta,setMeta]=useState(EMPTY_META);
   const [saving,setSaving]=useState(false);
+
+  // ── zone editor state ─────────────────────────────────────────────────────
+  const [zones,setZones]=useState(()=>{ try{return JSON.parse(localStorage.getItem("fleetcc_zones")||"[]");}catch{return[];} });
+  const [zoneCfg,setZoneCfg]=useState(EMPTY_ZONE_CFG);
+  const [pendingVerts,setPendingVerts]=useState([]);
+  const [drawingZone,setDrawingZone]=useState(false);
+  useEffect(()=>{ localStorage.setItem("fleetcc_zones",JSON.stringify(zones)); },[zones]);
+
+  const handleZoneMapClick=useCallback((latlng)=>{
+    if(!drawingZone)return;
+    setZoneCfg(cfg=>{
+      if(cfg.type==="circle"){
+        const id=Date.now();
+        setZones(prev=>[...prev,{id,type:"circle",name:cfg.name,fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor,center:latlng,radius:Number(cfg.radius)}]);
+        setDrawingZone(false);
+        return cfg;
+      }
+      if(cfg.type==="square"){
+        setPendingVerts(prev=>{
+          if(prev.length===0)return[latlng];
+          const id=Date.now();
+          setZones(zs=>[...zs,{id,type:"square",name:cfg.name,fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor,bounds:[prev[0],latlng]}]);
+          setDrawingZone(false);
+          return[];
+        });
+        return cfg;
+      }
+      if(cfg.type==="triangle"){
+        setPendingVerts(prev=>{
+          const next=[...prev,latlng];
+          if(next.length===3){
+            const id=Date.now();
+            setZones(zs=>[...zs,{id,type:"triangle",name:cfg.name,fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor,vertices:next}]);
+            setDrawingZone(false);
+            return[];
+          }
+          return next;
+        });
+        return cfg;
+      }
+      return cfg;
+    });
+  },[drawingZone]);
+
+  const deleteZone=useCallback((id)=>setZones(prev=>prev.filter(z=>z.id!==id)),[]);
+  const cancelZoneDraw=()=>{ setDrawingZone(false); setPendingVerts([]); };
+
+  // ── punti editor state ───────────────────────────────────────────────────
+  const [punti,setPunti]=useState(()=>{ try{return JSON.parse(localStorage.getItem("fleetcc_punti")||"[]");}catch{return[];} });
+  const [puntoCfg,setPuntoCfg]=useState(EMPTY_PUNTO_CFG);
+  const [drawingPunti,setDrawingPunti]=useState(false);
+  useEffect(()=>{ localStorage.setItem("fleetcc_punti",JSON.stringify(punti)); },[punti]);
+
+  const handlePuntiMapClick=useCallback((latlng)=>{
+    if(!drawingPunti)return;
+    setPuntoCfg(cfg=>{
+      const id=Date.now();
+      setPunti(prev=>[...prev,{id,lat:latlng[0],lng:latlng[1],label:cfg.label,color:cfg.color}]);
+      return cfg;
+    });
+  },[drawingPunti]);
+
+  const deletePunto=useCallback((id)=>setPunti(prev=>prev.filter(p=>p.id!==id)),[]);
 
   const loadRoutes=useCallback(async()=>{
     try{
@@ -424,8 +597,10 @@ function GPSModule({onSelectVehicle}){
   if(loading)return<Spinner/>;if(error)return<ApiError error={error} onRetry={refetch}/>;
 
   const gpsTabs=[
-    {id:"live",label:"GPS Live",icon:"M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0 M12 7v5l3 3"},
-    {id:"editor",label:"Editor Percorsi",icon:"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"},
+    {id:"live",    label:"GPS Live",       icon:"M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0 M12 7v5l3 3"},
+    {id:"editor",  label:"Editor Percorsi",icon:"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"},
+    {id:"zone",    label:"Editor Zone",    icon:"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"},
+    {id:"punti",   label:"Editor Punti",   icon:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z M12 10m-3 0a3 3 0 1 0 6 0 3 3 0 1 0-6 0"},
   ];
 
   return(
@@ -464,11 +639,13 @@ function GPSModule({onSelectVehicle}){
         )}
 
         <div style={{flex:1,borderRadius:12,border:`1px solid ${T.border}`,position:"relative",overflow:"hidden"}}>
-          <FleetMap
+          {(tab==="live"||tab==="editor")&&<FleetMap
             vehicles={vehicles} routes={routes||[]} visibleRoutes={visibleRoutes}
             editMode={editorActive} editWaypoints={editWaypoints} editColor={meta.color}
             onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onWaypointDelete={handleWaypointDelete}
-          />
+          />}
+          {tab==="zone"&&<ZoneMap zones={zones} drawMode={drawingZone} zoneConfig={zoneCfg} pendingVerts={pendingVerts} onMapClick={handleZoneMapClick} onZoneDelete={deleteZone}/>}
+          {tab==="punti"&&<PuntiMap punti={punti} drawMode={drawingPunti} onMapClick={handlePuntiMapClick} onPuntoDelete={deletePunto}/>}
           {tab==="live"&&routes&&(
             <div style={{position:"absolute",top:12,right:12,zIndex:1000,background:"rgba(13,27,42,0.95)",border:`1px solid ${T.border}`,borderRadius:10,padding:"12px 16px",minWidth:200,backdropFilter:"blur(8px)"}}>
               <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:1,marginBottom:10,fontWeight:600}}>Percorsi raccolta</div>
@@ -506,6 +683,177 @@ function GPSModule({onSelectVehicle}){
           </div>
         )}
 
+        {/* ── EDITOR ZONE sidebar ── */}
+        {tab==="zone"&&(
+          <div style={{width:280,display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flexShrink:0}}>
+            <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+              <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:14}}>Nuova zona</div>
+
+              {/* shape type */}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:6,fontWeight:600}}>Forma</div>
+                <div style={{display:"flex",gap:6}}>
+                  {["circle","square","triangle"].map(s=>(
+                    <button key={s} onClick={()=>setZoneCfg(c=>({...c,type:s}))}
+                      style={{flex:1,padding:"7px 4px",background:zoneCfg.type===s?T.navActive:"transparent",border:`1px solid ${zoneCfg.type===s?T.blue+"66":T.border}`,borderRadius:7,color:zoneCfg.type===s?T.blue:T.textSub,cursor:"pointer",fontSize:11,fontFamily:T.font,fontWeight:600}}>
+                      {s==="circle"?"○ Cerchio":s==="square"?"□ Quadrato":"△ Triangolo"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* name */}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Nome</div>
+                <input value={zoneCfg.name} onChange={e=>setZoneCfg(c=>({...c,name:e.target.value}))}
+                  placeholder="es. Zona nord" style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"8px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
+              </div>
+
+              {/* radius (circle only) */}
+              {zoneCfg.type==="circle"&&(
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Raggio: {zoneCfg.radius} m</div>
+                  <input type="range" min={50} max={2000} step={50} value={zoneCfg.radius}
+                    onChange={e=>setZoneCfg(c=>({...c,radius:Number(e.target.value)}))}
+                    style={{width:"100%",accentColor:T.blue}}/>
+                </div>
+              )}
+
+              {/* fill color + opacity */}
+              <div style={{display:"flex",gap:10,marginBottom:12}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Riempimento</div>
+                  <input type="color" value={zoneCfg.fillColor} onChange={e=>setZoneCfg(c=>({...c,fillColor:e.target.value}))}
+                    style={{width:"100%",height:34,border:"none",borderRadius:6,cursor:"pointer",background:"none",padding:2}}/>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Bordo</div>
+                  <input type="color" value={zoneCfg.borderColor} onChange={e=>setZoneCfg(c=>({...c,borderColor:e.target.value}))}
+                    style={{width:"100%",height:34,border:"none",borderRadius:6,cursor:"pointer",background:"none",padding:2}}/>
+                </div>
+              </div>
+
+              {/* fill opacity */}
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Trasparenza riempimento: {Math.round(zoneCfg.fillOpacity*100)}%</div>
+                <input type="range" min={0} max={100} step={5} value={Math.round(zoneCfg.fillOpacity*100)}
+                  onChange={e=>setZoneCfg(c=>({...c,fillOpacity:Number(e.target.value)/100}))}
+                  style={{width:"100%",accentColor:T.blue}}/>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:T.textDim,marginTop:2}}><span>Trasparente</span><span>Pieno</span></div>
+              </div>
+
+              {/* preview */}
+              <div style={{marginBottom:14,height:28,borderRadius:6,background:zoneCfg.fillColor,opacity:zoneCfg.fillOpacity===0?0.05:zoneCfg.fillOpacity,border:`2px solid ${zoneCfg.borderColor}`}}/>
+
+              {/* instructions */}
+              <div style={{fontSize:11,color:T.textDim,marginBottom:12,padding:"8px 10px",background:T.bg,borderRadius:6,border:`1px solid ${T.border}`,lineHeight:1.6}}>
+                {zoneCfg.type==="circle"&&"Click sulla mappa → posiziona il cerchio"}
+                {zoneCfg.type==="square"&&"1° click → angolo 1 · 2° click → angolo 2"}
+                {zoneCfg.type==="triangle"&&`3 click per i vertici · Fatti: ${pendingVerts.length}/3`}
+              </div>
+
+              <div style={{display:"flex",gap:8}}>
+                {!drawingZone
+                  ? <button onClick={()=>{setDrawingZone(true);setPendingVerts([]);}}
+                      style={{flex:1,padding:"9px",background:T.navActive,border:`1px solid ${T.blue+"66"}`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+                      + Disegna zona
+                    </button>
+                  : <button onClick={cancelZoneDraw}
+                      style={{flex:1,padding:"9px",background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:7,color:T.red,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+                      ✕ Annulla
+                    </button>
+                }
+              </div>
+            </div>
+
+            {/* zone list */}
+            {zones.length>0&&(
+              <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+                <div style={{fontSize:11,color:T.textSub,textTransform:"uppercase",letterSpacing:0.8,fontWeight:700,marginBottom:10}}>Zone salvate ({zones.length})</div>
+                {zones.map(z=>(
+                  <div key={z.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7,padding:"7px 10px",background:T.bg,borderRadius:7,border:`1px solid ${T.border}`}}>
+                    <div style={{width:14,height:14,borderRadius:z.type==="circle"?"50%":z.type==="square"?"2px":"0",background:z.fillColor,opacity:Math.max(z.fillOpacity,0.4),border:`2px solid ${z.borderColor}`,flexShrink:0,clipPath:z.type==="triangle"?"polygon(50% 0%,0% 100%,100% 100%)":undefined}}/>
+                    <span style={{fontSize:12,color:T.text,flex:1}}>{z.name||z.type}</span>
+                    <span style={{fontSize:10,color:T.textDim}}>{z.type==="circle"?`${z.radius}m`:z.type==="square"?"rect":"tri"}</span>
+                    <button onClick={()=>deleteZone(z.id)} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1}}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── EDITOR PUNTI sidebar ── */}
+        {tab==="punti"&&(
+          <div style={{width:260,display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flexShrink:0}}>
+            <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+              <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:14}}>Nuovo punto</div>
+
+              {/* label */}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Etichetta</div>
+                <input value={puntoCfg.label} onChange={e=>setPuntoCfg(c=>({...c,label:e.target.value}))}
+                  placeholder="es. Deposito nord" style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"8px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
+              </div>
+
+              {/* color */}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:6,fontWeight:600}}>Colore</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                  {["#f87171","#fb923c","#facc15","#4ade80","#34d399","#60a5fa","#c084fc","#f9a8d4"].map(c=>(
+                    <div key={c} onClick={()=>setPuntoCfg(p=>({...p,color:c}))}
+                      style={{width:24,height:24,borderRadius:"50%",background:c,cursor:"pointer",flexShrink:0,border:puntoCfg.color===c?"3px solid #fff":"2px solid transparent",boxShadow:puntoCfg.color===c?"0 0 0 1px #000":"none"}}/>
+                  ))}
+                </div>
+                <input type="color" value={puntoCfg.color} onChange={e=>setPuntoCfg(c=>({...c,color:e.target.value}))}
+                  style={{width:"100%",height:32,border:"none",borderRadius:6,cursor:"pointer",background:"none",padding:2}}/>
+              </div>
+
+              {/* preview */}
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,padding:"10px 12px",background:T.bg,borderRadius:7,border:`1px solid ${T.border}`}}>
+                <div style={{width:20,height:20,borderRadius:"50%",background:puntoCfg.color,border:"2px solid #fff",boxShadow:"0 2px 6px rgba(0,0,0,0.4)",flexShrink:0}}/>
+                <span style={{fontSize:12,color:T.text}}>{puntoCfg.label||"(senza etichetta)"}</span>
+              </div>
+
+              <div style={{fontSize:11,color:T.textDim,marginBottom:12,padding:"8px 10px",background:T.bg,borderRadius:6,border:`1px solid ${T.border}`,lineHeight:1.6}}>
+                {drawingPunti?"Click sulla mappa per aggiungere punti. Il modo rimane attivo.":"Clicca Aggiungi e poi sulla mappa."}
+              </div>
+
+              <div style={{display:"flex",gap:8}}>
+                {!drawingPunti
+                  ? <button onClick={()=>setDrawingPunti(true)}
+                      style={{flex:1,padding:"9px",background:T.navActive,border:`1px solid ${T.blue+"66"}`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+                      + Aggiungi punti
+                    </button>
+                  : <button onClick={()=>setDrawingPunti(false)}
+                      style={{flex:1,padding:"9px",background:"#0d2010",border:`1px solid ${T.green+"55"}`,borderRadius:7,color:T.green,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+                      ✓ Fine
+                    </button>
+                }
+              </div>
+            </div>
+
+            {/* punti list */}
+            {punti.length>0&&(
+              <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <div style={{fontSize:11,color:T.textSub,textTransform:"uppercase",letterSpacing:0.8,fontWeight:700}}>Punti ({punti.length})</div>
+                  <button onClick={()=>{ if(window.confirm("Eliminare tutti i punti?"))setPunti([]);}} style={{background:"none",border:"none",color:T.textDim,cursor:"pointer",fontSize:11,fontFamily:T.font}}>Cancella tutto</button>
+                </div>
+                {punti.map(p=>(
+                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"6px 10px",background:T.bg,borderRadius:7,border:`1px solid ${T.border}`}}>
+                    <div style={{width:12,height:12,borderRadius:"50%",background:p.color,flexShrink:0}}/>
+                    <span style={{fontSize:12,color:T.text,flex:1}}>{p.label||"—"}</span>
+                    <span style={{fontSize:9,color:T.textDim,fontFamily:T.mono}}>{p.lat.toFixed(3)},{p.lng.toFixed(3)}</span>
+                    <button onClick={()=>deletePunto(p.id)} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1}}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── EDITOR PERCORSI with editing form ── */}
         {tab==="editor"&&editingId&&(
           <div style={{width:260,display:"flex",flexDirection:"column",gap:10,overflowY:"auto"}}>
             <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>

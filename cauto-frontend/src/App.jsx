@@ -293,12 +293,14 @@ function VehicleDetail({vehicle,onBack}){
 }
 
 // ─── GPS MAP ──────────────────────────────────────────────────────────────────
-function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColor,onMapClick,onWaypointMove,onWaypointDelete}){
+function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColor,zones,punti,onMapClick,onWaypointMove,onWaypointDelete,searchMarkerRef}){
   const containerRef=useRef(null);
   const mapRef=useRef(null);
   const routeLayerRef=useRef(null);
   const vehicleLayerRef=useRef(null);
   const editLayerRef=useRef(null);
+  const zoneLayerRef=useRef(null);
+  const puntiLayerRef=useRef(null);
   const cbClick=useRef(onMapClick);
   const cbMove=useRef(onWaypointMove);
   const cbDel=useRef(onWaypointDelete);
@@ -311,12 +313,15 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
     const map=L.map(containerRef.current,{center:[44.835,11.619],zoom:13});
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',maxZoom:19}).addTo(map);
     routeLayerRef.current=L.layerGroup().addTo(map);
+    zoneLayerRef.current=L.layerGroup().addTo(map);
+    puntiLayerRef.current=L.layerGroup().addTo(map);
     vehicleLayerRef.current=L.layerGroup().addTo(map);
     editLayerRef.current=L.layerGroup().addTo(map);
     map.on("click",(e)=>{ if(cbClick.current)cbClick.current([e.latlng.lat,e.latlng.lng]); });
     mapRef.current=map;
-    return()=>{map.remove();mapRef.current=null;};
-  },[]);
+    if(searchMarkerRef)searchMarkerRef.current=map;
+    return()=>{map.remove();mapRef.current=null;if(searchMarkerRef)searchMarkerRef.current=null;};
+  },[]);// eslint-disable-line
 
   useEffect(()=>{
     if(!mapRef.current)return;
@@ -330,10 +335,37 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
       const opacity=editMode?0.2:(visibleRoutes[r.id]?(r.opacity??0.85):0);
       if(opacity===0)return;
       const line=L.polyline(r.waypoints,{color:r.color,weight:4,opacity,dashArray:r.status==="pianificato"?"10 7":null});
-      if(!editMode)line.bindTooltip(`<b>${r.name}</b><br>${r.vehicle} · ${r.stops} fermate`,{sticky:true});
+      if(!editMode)line.bindTooltip(`<b>${r.name}</b>${r.comune?`<br>${r.comune}`:""}`,{sticky:true});
       routeLayerRef.current.addLayer(line);
     });
   },[routes,visibleRoutes,editMode]);
+
+  // zones overlay
+  useEffect(()=>{
+    if(!mapRef.current||!zoneLayerRef.current)return;
+    zoneLayerRef.current.clearLayers();
+    (zones||[]).forEach(z=>{
+      const style={fillColor:z.fillColor,fillOpacity:z.fillOpacity,color:z.borderColor,weight:2,opacity:1};
+      let shape;
+      if(z.type==="circle")shape=L.circle(z.center,{radius:z.radius,...style});
+      else if(z.type==="square")shape=L.rectangle(z.bounds,style);
+      else shape=L.polygon(z.vertices,style);
+      if(z.name)shape.bindTooltip(z.name,{sticky:false});
+      zoneLayerRef.current.addLayer(shape);
+    });
+  },[zones]);
+
+  // punti overlay
+  useEffect(()=>{
+    if(!mapRef.current||!puntiLayerRef.current)return;
+    puntiLayerRef.current.clearLayers();
+    (punti||[]).forEach(p=>{
+      const m=L.marker([p.lat,p.lng],{icon:L.divIcon({className:"",html:`<div style="width:16px;height:16px;background:${p.color};border:2px solid #fff;border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,0.5)"></div>`,iconSize:[16,16],iconAnchor:[8,8]})});
+      const sub=[p.comune,p.materiale,p.sector].filter(Boolean).join(" · ");
+      if(p.nome||sub)m.bindTooltip(`<b>${p.nome||""}</b>${sub?`<br><span style="font-size:10px;color:#888">${sub}</span>`:""}`,{sticky:false});
+      puntiLayerRef.current.addLayer(m);
+    });
+  },[punti]);
 
   useEffect(()=>{
     if(!mapRef.current||!vehicles||!vehicleLayerRef.current)return;
@@ -538,6 +570,15 @@ function GPSModule({onSelectVehicle}){
   const [zoneCfg,setZoneCfg]=useState(EMPTY_ZONE_CFG);
   const [drawingZone,setDrawingZone]=useState(false);
   const [legendOpen,setLegendOpen]=useState({live:true,zone:true,punti:true});
+  // GPS Live panel state
+  const [livePanelOpen,setLivePanelOpen]=useState(true);
+  const [filterComune,setFilterComune]=useState("");
+  const [filterSettore,setFilterSettore]=useState("");
+  const [searchAddr,setSearchAddr]=useState("");
+  const [searchResults,setSearchResults]=useState([]);
+  const [searchLoading,setSearchLoading]=useState(false);
+  const liveMapRef=useRef(null);
+  const searchPinRef=useRef(null);
   useEffect(()=>{ localStorage.setItem("fleetcc_zones",JSON.stringify(zones)); },[zones]);
 
   const handleShapeComplete=useCallback((shape)=>{ setZones(prev=>[...prev,shape]); setDrawingZone(false); },[]);
@@ -560,6 +601,28 @@ function GPSModule({onSelectVehicle}){
   },[drawingPunti]);
 
   const deletePunto=useCallback((id)=>setPunti(prev=>prev.filter(p=>p.id!==id)),[]);
+
+  const searchAddress=useCallback(async(q)=>{
+    if(!q.trim()){setSearchResults([]);return;}
+    setSearchLoading(true);
+    try{
+      const res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`,{headers:{"Accept-Language":"it"}});
+      const data=await res.json();
+      setSearchResults(data);
+    }catch{}
+    setSearchLoading(false);
+  },[]);
+
+  const flyToResult=useCallback((r)=>{
+    if(!liveMapRef.current)return;
+    const map=liveMapRef.current;
+    const lat=parseFloat(r.lat),lng=parseFloat(r.lon);
+    map.flyTo([lat,lng],16,{animate:true,duration:1.2});
+    if(searchPinRef.current){searchPinRef.current.remove();searchPinRef.current=null;}
+    searchPinRef.current=L.marker([lat,lng],{icon:L.divIcon({className:"",html:`<div style="width:22px;height:22px;background:#f87171;border:3px solid #fff;border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.6)"></div>`,iconSize:[22,22],iconAnchor:[11,11]})})
+      .addTo(map).bindPopup(`<b style="font-size:12px">${r.display_name}</b>`).openPopup();
+    setSearchResults([]);setSearchAddr(r.display_name);
+  },[]);
 
   const loadRoutes=useCallback(async()=>{
     try{
@@ -624,6 +687,83 @@ function GPSModule({onSelectVehicle}){
       </div>
 
       <div style={{display:"flex",gap:16,flex:1,minHeight:0}}>
+
+        {/* ── GPS Live: collapsible left vehicle panel ── */}
+        {tab==="live"&&(
+          <div style={{display:"flex",flexDirection:"column",flexShrink:0,transition:"width 0.2s ease",width:livePanelOpen?260:40,overflow:"hidden"}}>
+            {/* toggle tab */}
+            <div onClick={()=>setLivePanelOpen(o=>!o)}
+              style={{display:"flex",alignItems:"center",justifyContent:livePanelOpen?"space-between":"center",gap:6,padding:"8px 10px",background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:8,cursor:"pointer",marginBottom:8,flexShrink:0}}>
+              {livePanelOpen&&<span style={{fontSize:11,fontWeight:700,color:T.textSub,textTransform:"uppercase",letterSpacing:0.8}}>Veicoli</span>}
+              <span style={{fontSize:16,color:T.textSub,lineHeight:1}}>{livePanelOpen?"◀":"▶"}</span>
+            </div>
+
+            {livePanelOpen&&<>
+              {/* address search */}
+              <div style={{marginBottom:8,position:"relative"}}>
+                <div style={{display:"flex",gap:0,background:T.bg,border:`1px solid ${T.border}`,borderRadius:7,overflow:"hidden"}}>
+                  <input value={searchAddr} onChange={e=>{setSearchAddr(e.target.value);if(e.target.value.length<2)setSearchResults([]);}}
+                    onKeyDown={e=>{if(e.key==="Enter")searchAddress(searchAddr);}}
+                    placeholder="Cerca indirizzo..." style={{flex:1,background:"transparent",border:"none",color:T.text,padding:"7px 10px",fontSize:12,fontFamily:T.font,outline:"none"}}/>
+                  <button onClick={()=>searchAddress(searchAddr)} style={{background:T.navActive,border:"none",borderLeft:`1px solid ${T.border}`,color:T.blue,padding:"7px 11px",cursor:"pointer",fontSize:13}}>
+                    {searchLoading?"…":"🔍"}
+                  </button>
+                </div>
+                {searchResults.length>0&&(
+                  <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:2000,background:T.card,border:`1px solid ${T.border}`,borderRadius:7,boxShadow:"0 6px 20px rgba(0,0,0,0.4)",marginTop:3,maxHeight:200,overflowY:"auto"}}>
+                    {searchResults.map((r,i)=>(
+                      <div key={i} onClick={()=>flyToResult(r)} style={{padding:"8px 12px",cursor:"pointer",borderBottom:`1px solid ${T.border}`,fontSize:11,color:T.text,lineHeight:1.4}}
+                        onMouseEnter={e=>e.currentTarget.style.background=T.bg}
+                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        {r.display_name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* filters */}
+              <div style={{display:"flex",gap:6,marginBottom:8}}>
+                <input value={filterComune} onChange={e=>setFilterComune(e.target.value)} placeholder="Comune…"
+                  style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"6px 8px",fontSize:11,fontFamily:T.font,outline:"none"}}/>
+                <input value={filterSettore} onChange={e=>setFilterSettore(e.target.value)} placeholder="Settore…"
+                  style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"6px 8px",fontSize:11,fontFamily:T.font,outline:"none"}}/>
+              </div>
+              {(filterComune||filterSettore)&&<div style={{fontSize:10,color:T.textDim,marginBottom:6,paddingLeft:2}}>
+                {(vehicles||[]).filter(v=>
+                  (!filterComune||v.name?.toLowerCase().includes(filterComune.toLowerCase())||(v.comune||"").toLowerCase().includes(filterComune.toLowerCase()))&&
+                  (!filterSettore||(v.sector||"").toLowerCase().includes(filterSettore.toLowerCase()))
+                ).length} veicoli mostrati
+              </div>}
+
+              {/* vehicle cards */}
+              <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:7}}>
+                {(vehicles||[])
+                  .filter(v=>
+                    (!filterComune||v.name?.toLowerCase().includes(filterComune.toLowerCase())||(v.comune||"").toLowerCase().includes(filterComune.toLowerCase()))&&
+                    (!filterSettore||(v.sector||"").toLowerCase().includes(filterSettore.toLowerCase()))
+                  )
+                  .map(v=>(
+                  <div key={v.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:9,padding:"11px 12px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
+                      <span style={{fontSize:12,fontWeight:700,color:T.text,lineHeight:1.2}}>{v.name}</span>
+                      <span style={{fontSize:9,padding:"2px 7px",borderRadius:9,background:statusColor[v.status]+"22",color:statusColor[v.status],fontWeight:700,flexShrink:0,marginLeft:4}}>{statusLabel[v.status]}</span>
+                    </div>
+                    <div style={{fontSize:10,color:T.textSub,marginBottom:6}}>{v.plate}{v.sector?` · ${v.sector}`:""}</div>
+                    {v.fuel_pct!=null&&<>
+                      <div style={{height:3,background:T.border,borderRadius:2,marginBottom:2}}>
+                        <div style={{height:"100%",width:`${v.fuel_pct}%`,background:v.fuel_pct<20?T.red:T.green,borderRadius:2}}/>
+                      </div>
+                      <div style={{fontSize:9,color:v.fuel_pct<20?T.red:T.textDim,marginBottom:6}}>⛽ {v.fuel_pct}%</div>
+                    </>}
+                    <button onClick={()=>onSelectVehicle(v)} style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:5,color:T.text,padding:"5px",cursor:"pointer",fontSize:11,fontFamily:T.font}}>Dettaglio →</button>
+                  </div>
+                ))}
+              </div>
+            </>}
+          </div>
+        )}
+
         {tab==="editor"&&!editingId&&(
           <div style={{width:260,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
             {(routes||[]).length===0&&<div style={{fontSize:13,color:T.textDim,textAlign:"center",marginTop:20}}>Nessun percorso</div>}
@@ -647,8 +787,10 @@ function GPSModule({onSelectVehicle}){
         <div style={{flex:1,borderRadius:12,border:`1px solid ${T.border}`,position:"relative",overflow:"hidden"}}>
           {(tab==="live"||tab==="editor")&&<FleetMap
             vehicles={vehicles} routes={routes||[]} visibleRoutes={visibleRoutes}
+            zones={tab==="live"?zones:[]} punti={tab==="live"?punti:[]}
             editMode={editorActive} editWaypoints={editWaypoints} editColor={meta.color}
             onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onWaypointDelete={handleWaypointDelete}
+            searchMarkerRef={tab==="live"?liveMapRef:null}
           />}
           {tab==="zone"&&<ZoneMap zones={zones} drawMode={drawingZone} zoneConfig={zoneCfg} onShapeComplete={handleShapeComplete} onZoneDelete={deleteZone}/>}
           {tab==="punti"&&<PuntiMap punti={punti} drawMode={drawingPunti} onMapClick={handlePuntiMapClick} onPuntoDelete={deletePunto}/>}
@@ -716,27 +858,6 @@ function GPSModule({onSelectVehicle}){
           )}
           {tab==="live"&&<div style={{position:"absolute",bottom:10,left:10,zIndex:1000,fontSize:10,color:T.textSub,fontFamily:T.mono,background:"rgba(13,27,42,0.85)",padding:"4px 10px",borderRadius:6}}>Aggiornamento ogni 10s · Visirun mock</div>}
         </div>
-
-        {tab==="live"&&(
-          <div style={{width:240,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
-            {vehicles&&vehicles.map(v=>(
-              <div key={v.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                  <span style={{fontSize:13,fontWeight:600,color:T.text}}>{v.name}</span>
-                  <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:statusColor[v.status]+"22",color:statusColor[v.status],fontWeight:600}}>{statusLabel[v.status]}</span>
-                </div>
-                <div style={{fontSize:11,color:T.textSub,marginBottom:8}}>{v.plate} · {v.sector||"—"}</div>
-                {v.fuel_pct!=null&&<>
-                  <div style={{height:4,background:T.border,borderRadius:2,marginBottom:2}}>
-                    <div style={{height:"100%",width:`${v.fuel_pct}%`,background:v.fuel_pct<20?T.red:T.green,borderRadius:2}}/>
-                  </div>
-                  <div style={{fontSize:10,color:T.textDim,marginBottom:8}}>Carburante: {v.fuel_pct}%</div>
-                </>}
-                <button onClick={()=>onSelectVehicle(v)} style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"6px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Dettaglio →</button>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* ── EDITOR ZONE sidebar ── */}
         {tab==="zone"&&(

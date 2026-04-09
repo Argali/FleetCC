@@ -567,8 +567,10 @@ function GPSModule({onSelectVehicle}){
 
   // ── zone editor state ─────────────────────────────────────────────────────
   const [zones,setZones]=useState(()=>{ try{return JSON.parse(localStorage.getItem("fleetcc_zones")||"[]");}catch{return[];} });
+  const [visibleZones,setVisibleZones]=useState({});
   const [zoneCfg,setZoneCfg]=useState(EMPTY_ZONE_CFG);
   const [drawingZone,setDrawingZone]=useState(false);
+  const [editingZone,setEditingZone]=useState(false);
   const [legendOpen,setLegendOpen]=useState({live:true,zone:true,punti:true});
   // GPS Live panel state
   const [livePanelOpen,setLivePanelOpen]=useState(true);
@@ -580,16 +582,22 @@ function GPSModule({onSelectVehicle}){
   const liveMapRef=useRef(null);
   const searchPinRef=useRef(null);
   useEffect(()=>{ localStorage.setItem("fleetcc_zones",JSON.stringify(zones)); },[zones]);
+  useEffect(()=>{ setVisibleZones(prev=>{ const n={...prev}; zones.forEach(z=>{ if(!(z.id in n))n[z.id]=true; }); return n; }); },[zones]);
+  const toggleZone=(id)=>setVisibleZones(prev=>({...prev,[id]:!prev[id]}));
 
-  const handleShapeComplete=useCallback((shape)=>{ setZones(prev=>[...prev,shape]); setDrawingZone(false); },[]);
+  const handleShapeComplete=useCallback((shape)=>{ setZones(prev=>[...prev,shape]); setDrawingZone(false); setEditingZone(false); },[]);
   const deleteZone=useCallback((id)=>setZones(prev=>prev.filter(z=>z.id!==id)),[]);
-  const cancelZoneDraw=()=>setDrawingZone(false);
+  const cancelZoneDraw=()=>{ setDrawingZone(false); setEditingZone(false); setZoneCfg(EMPTY_ZONE_CFG); };
 
   // ── punti editor state ───────────────────────────────────────────────────
   const [punti,setPunti]=useState(()=>{ try{return JSON.parse(localStorage.getItem("fleetcc_punti")||"[]");}catch{return[];} });
+  const [visiblePunti,setVisiblePunti]=useState({});
   const [puntoCfg,setPuntoCfg]=useState(EMPTY_PUNTO_CFG);
   const [drawingPunti,setDrawingPunti]=useState(false);
+  const [editingPunto,setEditingPunto]=useState(false);
   useEffect(()=>{ localStorage.setItem("fleetcc_punti",JSON.stringify(punti)); },[punti]);
+  useEffect(()=>{ setVisiblePunti(prev=>{ const n={...prev}; punti.forEach(p=>{ if(!(p.id in n))n[p.id]=true; }); return n; }); },[punti]);
+  const togglePunto=(id)=>setVisiblePunti(prev=>({...prev,[id]:!prev[id]}));
 
   const handlePuntiMapClick=useCallback((latlng)=>{
     if(!drawingPunti)return;
@@ -601,6 +609,7 @@ function GPSModule({onSelectVehicle}){
   },[drawingPunti]);
 
   const deletePunto=useCallback((id)=>setPunti(prev=>prev.filter(p=>p.id!==id)),[]);
+  const cancelPuntoEdit=()=>{ setDrawingPunti(false); setEditingPunto(false); setPuntoCfg(EMPTY_PUNTO_CFG); };
 
   const searchAddress=useCallback(async(q)=>{
     if(!q.trim()){setSearchResults([]);return;}
@@ -682,6 +691,20 @@ function GPSModule({onSelectVehicle}){
           )}
           {tab==="editor"&&editingId&&(
             <span style={{fontSize:11,color:T.textSub,display:"flex",alignItems:"center"}}>Click mappa → aggiungi · Click punto → rimuovi · Trascina → sposta</span>
+          )}
+          {tab==="zone"&&!editingZone&&(
+            <button onClick={()=>setEditingZone(true)} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuova zona</button>
+          )}
+          {tab==="zone"&&editingZone&&drawingZone&&(
+            <span style={{fontSize:11,color:T.textSub,display:"flex",alignItems:"center"}}>
+              {{circle:"Click 1=centro · Click 2=bordo",square:"Click 1=angolo A · Click 2=angolo B",triangle:"3 click per i vertici",parallelogram:"4 click per i vertici"}[zoneCfg.type]}
+            </span>
+          )}
+          {tab==="punti"&&!editingPunto&&(
+            <button onClick={()=>setEditingPunto(true)} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuovo punto</button>
+          )}
+          {tab==="punti"&&editingPunto&&drawingPunti&&(
+            <span style={{fontSize:11,color:T.textSub,display:"flex",alignItems:"center"}}>Modalità attiva — click sulla mappa per aggiungere</span>
           )}
         </div>
       </div>
@@ -787,193 +810,235 @@ function GPSModule({onSelectVehicle}){
         <div style={{flex:1,borderRadius:12,border:`1px solid ${T.border}`,position:"relative",overflow:"hidden"}}>
           {(tab==="live"||tab==="editor")&&<FleetMap
             vehicles={vehicles} routes={routes||[]} visibleRoutes={visibleRoutes}
-            zones={tab==="live"?zones:[]} punti={tab==="live"?punti:[]}
+            zones={tab==="live"?zones.filter(z=>visibleZones[z.id]!==false):[]} punti={tab==="live"?punti.filter(p=>visiblePunti[p.id]!==false):[]}
             editMode={editorActive} editWaypoints={editWaypoints} editColor={meta.color}
             onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onWaypointDelete={handleWaypointDelete}
             searchMarkerRef={tab==="live"?liveMapRef:null}
           />}
           {tab==="zone"&&<ZoneMap zones={zones} drawMode={drawingZone} zoneConfig={zoneCfg} onShapeComplete={handleShapeComplete} onZoneDelete={deleteZone}/>}
           {tab==="punti"&&<PuntiMap punti={punti} drawMode={drawingPunti} onMapClick={handlePuntiMapClick} onPuntoDelete={deletePunto}/>}
-          {/* ── floating legend: Percorsi ── */}
-          {tab==="live"&&routes&&(
-            <div style={{position:"absolute",top:12,right:12,zIndex:1000,background:"rgba(13,27,42,0.82)",border:`1px solid ${T.border}`,borderRadius:10,minWidth:200,backdropFilter:"blur(8px)",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
-              <div onClick={()=>setLegendOpen(o=>({...o,live:!o.live}))} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",cursor:"pointer",userSelect:"none"}}>
-                <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:1,fontWeight:700,flex:1}}>Percorsi raccolta ({routes.length})</div>
-                <span style={{fontSize:14,color:T.textDim,lineHeight:1}}>{legendOpen.live?"▲":"▼"}</span>
-              </div>
-              {legendOpen.live&&<div style={{padding:"0 14px 12px"}}>
-                {routes.map(r=>(
-                  <div key={r.id} onClick={()=>toggleRoute(r.id)} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7,cursor:"pointer",opacity:visibleRoutes[r.id]?1:0.35,transition:"opacity 0.15s"}}>
-                    <div style={{width:24,height:3,background:r.color,borderRadius:2,flexShrink:0}}/>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:12,color:T.text,fontWeight:600}}>{r.name}</div>
-                      {(r.comune||r.materiale)&&<div style={{fontSize:10,color:T.textDim}}>{[r.comune,r.materiale].filter(Boolean).join(" · ")}</div>}
-                    </div>
+          {/* ── unified floating legend (live tab) ── */}
+          {tab==="live"&&((routes&&routes.length>0)||zones.length>0||punti.length>0)&&(
+            <div style={{position:"absolute",top:12,right:12,zIndex:1000,background:"rgba(13,27,42,0.82)",border:`1px solid ${T.border}`,borderRadius:10,minWidth:210,maxWidth:240,backdropFilter:"blur(8px)",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
+              {/* Percorsi section */}
+              {routes&&routes.length>0&&(
+                <>
+                  <div onClick={()=>setLegendOpen(o=>({...o,live:!o.live}))} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",cursor:"pointer",userSelect:"none",borderBottom:legendOpen.live?`1px solid ${T.border}`:"none"}}>
+                    <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:1,fontWeight:700,flex:1}}>Percorsi ({routes.length})</div>
+                    <span style={{fontSize:12,color:T.textDim}}>{legendOpen.live?"▲":"▼"}</span>
                   </div>
-                ))}
-                <div style={{marginTop:6,paddingTop:6,borderTop:`1px solid ${T.border}`,fontSize:10,color:T.textDim}}>Click per mostrare/nascondere</div>
-              </div>}
+                  {legendOpen.live&&<div style={{padding:"8px 14px",borderBottom:zones.length>0||punti.length>0?`1px solid ${T.border}`:"none"}}>
+                    {routes.map(r=>(
+                      <div key={r.id} onClick={()=>toggleRoute(r.id)} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,cursor:"pointer",opacity:visibleRoutes[r.id]?1:0.3,transition:"opacity 0.15s"}}>
+                        <div style={{width:22,height:3,background:r.color,borderRadius:2,flexShrink:0}}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:11,color:T.text,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.name}</div>
+                          {(r.comune||r.materiale)&&<div style={{fontSize:9,color:T.textDim}}>{[r.comune,r.materiale].filter(Boolean).join(" · ")}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>}
+                </>
+              )}
+              {/* Zone section */}
+              {zones.length>0&&(
+                <>
+                  <div onClick={()=>setLegendOpen(o=>({...o,zone:!o.zone}))} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",cursor:"pointer",userSelect:"none",borderBottom:legendOpen.zone?`1px solid ${T.border}`:"none"}}>
+                    <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:1,fontWeight:700,flex:1}}>Zone ({zones.length})</div>
+                    <span style={{fontSize:12,color:T.textDim}}>{legendOpen.zone?"▲":"▼"}</span>
+                  </div>
+                  {legendOpen.zone&&<div style={{padding:"8px 14px",borderBottom:punti.length>0?`1px solid ${T.border}`:"none"}}>
+                    {zones.map(z=>(
+                      <div key={z.id} onClick={()=>toggleZone(z.id)} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,cursor:"pointer",opacity:visibleZones[z.id]!==false?1:0.3,transition:"opacity 0.15s"}}>
+                        <div style={{width:14,height:14,flexShrink:0,background:z.fillColor,opacity:Math.max(z.fillOpacity,0.5),border:`2px solid ${z.borderColor}`,borderRadius:z.type==="circle"?"50%":"2px",clipPath:z.type==="triangle"?"polygon(50% 0%,0% 100%,100% 100%)":z.type==="parallelogram"?"polygon(25% 0%,100% 0%,75% 100%,0% 100%)":undefined}}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:11,color:T.text,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{z.name||z.type}</div>
+                          {(z.comune||z.materiale)&&<div style={{fontSize:9,color:T.textDim}}>{[z.comune,z.materiale].filter(Boolean).join(" · ")}</div>}
+                        </div>
+                        <span style={{fontSize:9,color:T.textDim,flexShrink:0}}>{z.type==="circle"?`${Math.round(z.radius)}m`:z.type.slice(0,3)}</span>
+                      </div>
+                    ))}
+                  </div>}
+                </>
+              )}
+              {/* Punti section */}
+              {punti.length>0&&(
+                <>
+                  <div onClick={()=>setLegendOpen(o=>({...o,punti:!o.punti}))} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",cursor:"pointer",userSelect:"none",borderBottom:legendOpen.punti?`1px solid ${T.border}`:"none"}}>
+                    <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:1,fontWeight:700,flex:1}}>Punti ({punti.length})</div>
+                    <span style={{fontSize:12,color:T.textDim}}>{legendOpen.punti?"▲":"▼"}</span>
+                  </div>
+                  {legendOpen.punti&&<div style={{padding:"8px 14px"}}>
+                    {punti.map(p=>(
+                      <div key={p.id} onClick={()=>togglePunto(p.id)} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,cursor:"pointer",opacity:visiblePunti[p.id]!==false?1:0.3,transition:"opacity 0.15s"}}>
+                        <div style={{width:11,height:11,borderRadius:"50%",background:p.color,flexShrink:0,border:"2px solid #fff",boxShadow:"0 1px 3px rgba(0,0,0,0.4)"}}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:11,color:T.text,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.nome||"—"}</div>
+                          {(p.comune||p.materiale)&&<div style={{fontSize:9,color:T.textDim}}>{[p.comune,p.materiale].filter(Boolean).join(" · ")}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>}
+                </>
+              )}
+              <div style={{padding:"6px 14px 8px",borderTop:`1px solid ${T.border}`,fontSize:9,color:T.textDim}}>Click per mostrare/nascondere</div>
             </div>
           )}
-          {/* ── floating legend: Zone ── */}
+          {/* ── editor-tab legends (zone / punti) ── */}
           {tab==="zone"&&zones.length>0&&(
             <div style={{position:"absolute",top:12,right:12,zIndex:1000,background:"rgba(13,27,42,0.82)",border:`1px solid ${T.border}`,borderRadius:10,minWidth:190,backdropFilter:"blur(8px)",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
               <div onClick={()=>setLegendOpen(o=>({...o,zone:!o.zone}))} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",cursor:"pointer",userSelect:"none"}}>
                 <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:1,fontWeight:700,flex:1}}>Zone ({zones.length})</div>
-                <span style={{fontSize:14,color:T.textDim,lineHeight:1}}>{legendOpen.zone?"▲":"▼"}</span>
+                <span style={{fontSize:12,color:T.textDim}}>{legendOpen.zone?"▲":"▼"}</span>
               </div>
-              {legendOpen.zone&&<div style={{padding:"0 14px 12px"}}>
+              {legendOpen.zone&&<div style={{padding:"0 14px 10px"}}>
                 {zones.map(z=>(
                   <div key={z.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                    <div style={{width:14,height:14,flexShrink:0,background:z.fillColor,opacity:Math.max(z.fillOpacity,0.35),border:`2px solid ${z.borderColor}`,borderRadius:z.type==="circle"?"50%":"2px",clipPath:z.type==="triangle"?"polygon(50% 0%,0% 100%,100% 100%)":undefined}}/>
-                    <span style={{fontSize:12,color:T.text,flex:1}}>{z.name||z.type}</span>
-                    <span style={{fontSize:10,color:T.textDim}}>{z.type==="circle"?`${Math.round(z.radius)}m`:z.type}</span>
+                    <div style={{width:13,height:13,flexShrink:0,background:z.fillColor,opacity:Math.max(z.fillOpacity,0.4),border:`2px solid ${z.borderColor}`,borderRadius:z.type==="circle"?"50%":"2px"}}/>
+                    <span style={{fontSize:11,color:T.text,flex:1}}>{z.name||z.type}</span>
+                    <button onClick={()=>deleteZone(z.id)} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:13,padding:"0 2px",lineHeight:1}}>×</button>
                   </div>
                 ))}
-                <div style={{marginTop:6,paddingTop:6,borderTop:`1px solid ${T.border}`,fontSize:10,color:T.textDim}}>Click zona sulla mappa → elimina</div>
+                <div style={{marginTop:4,paddingTop:6,borderTop:`1px solid ${T.border}`,fontSize:9,color:T.textDim}}>Click zona sulla mappa → elimina</div>
               </div>}
             </div>
           )}
-          {/* ── floating legend: Punti ── */}
           {tab==="punti"&&punti.length>0&&(
             <div style={{position:"absolute",top:12,right:12,zIndex:1000,background:"rgba(13,27,42,0.82)",border:`1px solid ${T.border}`,borderRadius:10,minWidth:190,backdropFilter:"blur(8px)",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
               <div onClick={()=>setLegendOpen(o=>({...o,punti:!o.punti}))} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",cursor:"pointer",userSelect:"none"}}>
                 <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:1,fontWeight:700,flex:1}}>Punti ({punti.length})</div>
-                <span style={{fontSize:14,color:T.textDim,lineHeight:1}}>{legendOpen.punti?"▲":"▼"}</span>
+                <span style={{fontSize:12,color:T.textDim}}>{legendOpen.punti?"▲":"▼"}</span>
               </div>
-              {legendOpen.punti&&<div style={{padding:"0 14px 12px"}}>
+              {legendOpen.punti&&<div style={{padding:"0 14px 10px"}}>
                 {punti.map(p=>(
                   <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                    <div style={{width:12,height:12,borderRadius:"50%",background:p.color,flexShrink:0,border:"2px solid #fff"}}/>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:12,color:T.text,fontWeight:600}}>{p.nome||"—"}</div>
-                      {(p.comune||p.materiale)&&<div style={{fontSize:10,color:T.textDim}}>{[p.comune,p.materiale].filter(Boolean).join(" · ")}</div>}
-                    </div>
-                    <span style={{fontSize:9,color:T.textDim,fontFamily:T.mono}}>{p.lat.toFixed(3)}</span>
+                    <div style={{width:11,height:11,borderRadius:"50%",background:p.color,flexShrink:0,border:"2px solid #fff"}}/>
+                    <span style={{fontSize:11,color:T.text,flex:1}}>{p.nome||"—"}</span>
+                    <button onClick={()=>deletePunto(p.id)} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:13,padding:"0 2px",lineHeight:1}}>×</button>
                   </div>
                 ))}
-                <div style={{marginTop:6,paddingTop:6,borderTop:`1px solid ${T.border}`,fontSize:10,color:T.textDim}}>Click punto sulla mappa → popup</div>
+                <div style={{marginTop:4,paddingTop:6,borderTop:`1px solid ${T.border}`,fontSize:9,color:T.textDim}}>Click punto sulla mappa → popup</div>
               </div>}
             </div>
           )}
           {tab==="live"&&<div style={{position:"absolute",bottom:10,left:10,zIndex:1000,fontSize:10,color:T.textSub,fontFamily:T.mono,background:"rgba(13,27,42,0.85)",padding:"4px 10px",borderRadius:6}}>Aggiornamento ogni 10s · Visirun mock</div>}
         </div>
 
-        {/* ── EDITOR ZONE sidebar ── */}
-        {tab==="zone"&&(
-          <div style={{width:274,display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flexShrink:0}}>
-            <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
-              <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:14}}>Nuova zona</div>
+        {/* ── EDITOR ZONE: list (matches percorsi layout) ── */}
+        {tab==="zone"&&!editingZone&&(
+          <div style={{width:260,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
+            {zones.length===0&&<div style={{fontSize:13,color:T.textDim,textAlign:"center",marginTop:20}}>Nessuna zona</div>}
+            {zones.map(z=>(
+              <div key={z.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                  <div style={{width:13,height:13,borderRadius:z.type==="circle"?"50%":"2px",background:z.fillColor,opacity:Math.max(z.fillOpacity,0.5),border:`2px solid ${z.borderColor}`,flexShrink:0,clipPath:z.type==="triangle"?"polygon(50% 0%,0% 100%,100% 100%)":z.type==="parallelogram"?"polygon(25% 0%,100% 0%,75% 100%,0% 100%)":undefined}}/>
+                  <span style={{fontSize:13,fontWeight:600,color:T.text,flex:1}}>{z.name||"—"}</span>
+                  <span style={{fontSize:9,color:T.textDim,background:T.bg,padding:"2px 6px",borderRadius:4}}>{z.type==="circle"?`${Math.round(z.radius)}m`:z.type}</span>
+                </div>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:10}}>{[z.comune,z.materiale,z.sector].filter(Boolean).join(" · ")||"—"}</div>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>deleteZone(z.id)} style={{flex:1,background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:6,color:T.red,padding:"5px 10px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Elimina</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-              {/* text fields — same as percorsi */}
+        {/* ── EDITOR ZONE: form ── */}
+        {tab==="zone"&&editingZone&&(
+          <div style={{width:264,display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flexShrink:0}}>
+            <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+              <div style={{fontSize:14,fontWeight:700,color:T.text,marginBottom:14}}>Nuova zona</div>
               {[["Nome","name"],["Comune","comune"],["Materiale","materiale"],["Settore","sector"]].map(([lbl,key])=>(
                 <div key={key} style={{marginBottom:11}}>
                   <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>{lbl}</div>
                   <input value={zoneCfg[key]||""} onChange={e=>setZoneCfg(c=>({...c,[key]:e.target.value}))} style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"7px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
                 </div>
               ))}
-
-              {/* shape selector */}
               <div style={{marginBottom:11}}>
                 <div style={{fontSize:11,color:T.textSub,marginBottom:6,fontWeight:600}}>Forma</div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
                   {[["circle","○ Cerchio","2 click"],["square","□ Rettangolo","2 click"],["triangle","△ Triangolo","3 click"],["parallelogram","⬡ Quadrilatero","4 click"]].map(([s,label,hint])=>(
                     <button key={s} onClick={()=>setZoneCfg(c=>({...c,type:s}))}
-                      style={{padding:"7px 6px",background:zoneCfg.type===s?T.navActive:"transparent",border:`1px solid ${zoneCfg.type===s?T.blue+"66":T.border}`,borderRadius:7,color:zoneCfg.type===s?T.blue:T.textSub,cursor:"pointer",fontSize:11,fontFamily:T.font,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                      <span>{label}</span><span style={{fontSize:9,opacity:0.6,fontWeight:400}}>{hint}</span>
+                      style={{padding:"7px 4px",background:zoneCfg.type===s?T.navActive:"transparent",border:`1px solid ${zoneCfg.type===s?T.blue+"66":T.border}`,borderRadius:7,color:zoneCfg.type===s?T.blue:T.textSub,cursor:"pointer",fontSize:10,fontFamily:T.font,fontWeight:600,display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
+                      <span>{label}</span><span style={{fontSize:8,opacity:0.6,fontWeight:400}}>{hint}</span>
                     </button>
                   ))}
                 </div>
               </div>
-
-              {/* fill + border colors */}
-              <div style={{display:"flex",gap:10,marginBottom:11}}>
+              <div style={{display:"flex",gap:8,marginBottom:11}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Riempimento</div>
-                  <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:5}}>
+                  <div style={{display:"flex",gap:3,flexWrap:"wrap",marginBottom:4}}>
                     {["#60a5fa","#4ade80","#fb923c","#f87171","#c084fc","#facc15","#34d399","#f9a8d4"].map(c=>(
-                      <div key={c} onClick={()=>setZoneCfg(z=>({...z,fillColor:c}))} style={{width:18,height:18,borderRadius:"50%",background:c,cursor:"pointer",border:zoneCfg.fillColor===c?"2px solid #fff":"1px solid transparent",flexShrink:0}}/>
+                      <div key={c} onClick={()=>setZoneCfg(z=>({...z,fillColor:c}))} style={{width:16,height:16,borderRadius:"50%",background:c,cursor:"pointer",border:zoneCfg.fillColor===c?"2px solid #fff":"1px solid transparent",flexShrink:0}}/>
                     ))}
                   </div>
-                  <input type="color" value={zoneCfg.fillColor} onChange={e=>setZoneCfg(c=>({...c,fillColor:e.target.value}))} style={{width:"100%",height:30,border:"none",borderRadius:5,cursor:"pointer",background:"none",padding:2}}/>
+                  <input type="color" value={zoneCfg.fillColor} onChange={e=>setZoneCfg(c=>({...c,fillColor:e.target.value}))} style={{width:"100%",height:28,border:"none",borderRadius:5,cursor:"pointer",background:"none",padding:2}}/>
                 </div>
                 <div style={{flex:1}}>
                   <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Bordo</div>
-                  <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:5}}>
+                  <div style={{display:"flex",gap:3,flexWrap:"wrap",marginBottom:4}}>
                     {["#3a7bd5","#22c55e","#f97316","#ef4444","#a855f7","#eab308","#10b981","#ec4899"].map(c=>(
-                      <div key={c} onClick={()=>setZoneCfg(z=>({...z,borderColor:c}))} style={{width:18,height:18,borderRadius:"50%",background:c,cursor:"pointer",border:zoneCfg.borderColor===c?"2px solid #fff":"1px solid transparent",flexShrink:0}}/>
+                      <div key={c} onClick={()=>setZoneCfg(z=>({...z,borderColor:c}))} style={{width:16,height:16,borderRadius:"50%",background:c,cursor:"pointer",border:zoneCfg.borderColor===c?"2px solid #fff":"1px solid transparent",flexShrink:0}}/>
                     ))}
                   </div>
-                  <input type="color" value={zoneCfg.borderColor} onChange={e=>setZoneCfg(c=>({...c,borderColor:e.target.value}))} style={{width:"100%",height:30,border:"none",borderRadius:5,cursor:"pointer",background:"none",padding:2}}/>
+                  <input type="color" value={zoneCfg.borderColor} onChange={e=>setZoneCfg(c=>({...c,borderColor:e.target.value}))} style={{width:"100%",height:28,border:"none",borderRadius:5,cursor:"pointer",background:"none",padding:2}}/>
                 </div>
               </div>
-
-              {/* opacity */}
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Trasparenza riempimento: {Math.round(zoneCfg.fillOpacity*100)}%</div>
+              <div style={{marginBottom:11}}>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Trasparenza: {Math.round(zoneCfg.fillOpacity*100)}%</div>
                 <input type="range" min={0} max={100} step={5} value={Math.round(zoneCfg.fillOpacity*100)}
                   onChange={e=>setZoneCfg(c=>({...c,fillOpacity:Number(e.target.value)/100}))}
                   style={{width:"100%",accentColor:zoneCfg.fillColor}}/>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:T.textDim,marginTop:2}}><span>Trasparente</span><span>Pieno</span></div>
               </div>
-
-              {/* preview strip */}
-              <div style={{marginBottom:12,height:24,borderRadius:6,background:zoneCfg.fillColor,opacity:Math.max(zoneCfg.fillOpacity,0.05),border:`2px solid ${zoneCfg.borderColor}`}}/>
-
-              {/* instruction */}
-              <div style={{fontSize:11,color:T.textDim,marginBottom:12,padding:"8px 10px",background:T.bg,borderRadius:6,border:`1px solid ${T.border}`,lineHeight:1.6}}>
-                {zoneCfg.type==="circle"&&"Click 1 = centro · Click 2 = bordo del cerchio"}
-                {zoneCfg.type==="square"&&"Click 1 = angolo A · Click 2 = angolo B"}
-                {zoneCfg.type==="triangle"&&"3 click per i 3 vertici del triangolo"}
-                {zoneCfg.type==="parallelogram"&&"4 click per i 4 vertici del quadrilatero"}
+              <div style={{marginBottom:12,height:20,borderRadius:5,background:zoneCfg.fillColor,opacity:Math.max(zoneCfg.fillOpacity,0.05),border:`2px solid ${zoneCfg.borderColor}`}}/>
+              <div style={{fontSize:10,color:T.textDim,marginBottom:12,padding:"7px 10px",background:T.bg,borderRadius:6,border:`1px solid ${T.border}`,lineHeight:1.5}}>
+                {{circle:"Click 1=centro · Click 2=bordo",square:"Click 1=angolo A · Click 2=angolo B",triangle:"3 click per i vertici",parallelogram:"4 click per i vertici"}[zoneCfg.type]}
               </div>
-
               <div style={{display:"flex",gap:8}}>
                 {!drawingZone
-                  ?<button onClick={()=>setDrawingZone(true)} style={{flex:1,padding:"9px",background:T.navActive,border:`1px solid ${T.blue+"66"}`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Disegna zona</button>
-                  :<button onClick={cancelZoneDraw} style={{flex:1,padding:"9px",background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:7,color:T.red,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>✕ Annulla</button>
+                  ?<button onClick={()=>setDrawingZone(true)} style={{flex:1,padding:"9px",background:T.navActive,border:`1px solid ${T.blue+"66"}`,borderRadius:6,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Disegna</button>
+                  :<button onClick={cancelZoneDraw} style={{background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:6,color:T.red,padding:"9px 14px",cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>✕</button>
                 }
+                <button onClick={cancelZoneDraw} style={{flex:1,background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:T.textSub,padding:"9px",cursor:"pointer",fontSize:13,fontFamily:T.font}}>Annulla</button>
               </div>
             </div>
-
-            {/* zone list */}
-            {zones.length>0&&(
-              <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
-                <div style={{fontSize:11,color:T.textSub,textTransform:"uppercase",letterSpacing:0.8,fontWeight:700,marginBottom:10}}>Zone salvate ({zones.length})</div>
-                {zones.map(z=>(
-                  <div key={z.id} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",marginBottom:7}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                      <div style={{width:12,height:12,borderRadius:z.type==="circle"?"50%":"2px",background:z.fillColor,opacity:Math.max(z.fillOpacity,0.4),border:`2px solid ${z.borderColor}`,flexShrink:0,clipPath:z.type==="triangle"?"polygon(50% 0%,0% 100%,100% 100%)":z.type==="parallelogram"?"polygon(25% 0%,100% 0%,75% 100%,0% 100%)":undefined}}/>
-                      <span style={{fontSize:12,fontWeight:600,color:T.text,flex:1}}>{z.name||z.type}</span>
-                      <span style={{fontSize:9,color:T.textDim,background:T.card,padding:"1px 6px",borderRadius:4}}>{z.type==="circle"?`${Math.round(z.radius)}m`:z.type}</span>
-                      <button onClick={()=>deleteZone(z.id)} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1}}>×</button>
-                    </div>
-                    {(z.comune||z.materiale||z.sector)&&<div style={{fontSize:10,color:T.textDim}}>{[z.comune,z.materiale,z.sector].filter(Boolean).join(" · ")}</div>}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
-        {/* ── EDITOR PUNTI sidebar ── */}
-        {tab==="punti"&&(
-          <div style={{width:260,display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flexShrink:0}}>
-            <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
-              <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:14}}>Nuovo punto</div>
+        {/* ── EDITOR PUNTI: list ── */}
+        {tab==="punti"&&!editingPunto&&(
+          <div style={{width:260,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
+            {punti.length===0&&<div style={{fontSize:13,color:T.textDim,textAlign:"center",marginTop:20}}>Nessun punto</div>}
+            {punti.map(p=>(
+              <div key={p.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                  <div style={{width:11,height:11,borderRadius:"50%",background:p.color,flexShrink:0,border:"2px solid #fff",boxShadow:`0 0 0 1px ${p.color}`}}/>
+                  <span style={{fontSize:13,fontWeight:600,color:T.text,flex:1}}>{p.nome||"—"}</span>
+                </div>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:4}}>{[p.comune,p.materiale,p.sector].filter(Boolean).join(" · ")||"—"}</div>
+                <div style={{fontSize:9,color:T.textDim,marginBottom:10,fontFamily:T.mono}}>{p.lat.toFixed(4)}, {p.lng.toFixed(4)}</div>
+                <button onClick={()=>deletePunto(p.id)} style={{width:"100%",background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:6,color:T.red,padding:"5px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Elimina</button>
+              </div>
+            ))}
+          </div>
+        )}
 
-              {/* same fields as percorsi */}
+        {/* ── EDITOR PUNTI: form ── */}
+        {tab==="punti"&&editingPunto&&(
+          <div style={{width:260,display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flexShrink:0}}>
+            <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+              <div style={{fontSize:14,fontWeight:700,color:T.text,marginBottom:14}}>Nuovo punto</div>
               {[["Nome","nome"],["Comune","comune"],["Materiale","materiale"],["Settore","sector"]].map(([lbl,key])=>(
                 <div key={key} style={{marginBottom:11}}>
                   <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>{lbl}</div>
                   <input value={puntoCfg[key]||""} onChange={e=>setPuntoCfg(c=>({...c,[key]:e.target.value}))} style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"7px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
                 </div>
               ))}
-
-              {/* color */}
               <div style={{marginBottom:12}}>
                 <div style={{fontSize:11,color:T.textSub,marginBottom:6,fontWeight:600}}>Colore</div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:7}}>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:7}}>
                   {["#f87171","#fb923c","#facc15","#4ade80","#34d399","#60a5fa","#c084fc","#f9a8d4"].map(c=>(
                     <div key={c} onClick={()=>setPuntoCfg(p=>({...p,color:c}))}
                       style={{width:22,height:22,borderRadius:"50%",background:c,cursor:"pointer",flexShrink:0,border:puntoCfg.color===c?"3px solid #fff":"2px solid transparent",boxShadow:puntoCfg.color===c?"0 0 0 1px #000":"none"}}/>
@@ -982,8 +1047,6 @@ function GPSModule({onSelectVehicle}){
                 <input type="color" value={puntoCfg.color} onChange={e=>setPuntoCfg(c=>({...c,color:e.target.value}))}
                   style={{width:"100%",height:30,border:"none",borderRadius:5,cursor:"pointer",background:"none",padding:2}}/>
               </div>
-
-              {/* preview */}
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"9px 12px",background:T.bg,borderRadius:7,border:`1px solid ${T.border}`}}>
                 <div style={{width:18,height:18,borderRadius:"50%",background:puntoCfg.color,border:"2px solid #fff",boxShadow:"0 2px 6px rgba(0,0,0,0.4)",flexShrink:0}}/>
                 <div>
@@ -991,39 +1054,14 @@ function GPSModule({onSelectVehicle}){
                   {(puntoCfg.comune||puntoCfg.materiale)&&<div style={{fontSize:10,color:T.textDim}}>{[puntoCfg.comune,puntoCfg.materiale].filter(Boolean).join(" · ")}</div>}
                 </div>
               </div>
-
-              <div style={{fontSize:11,color:T.textDim,marginBottom:12,padding:"8px 10px",background:T.bg,borderRadius:6,border:`1px solid ${T.border}`,lineHeight:1.6}}>
-                {drawingPunti?"Modalità attiva — click sulla mappa per aggiungere.":"Clicca Aggiungi poi sulla mappa."}
-              </div>
-
               <div style={{display:"flex",gap:8}}>
                 {!drawingPunti
-                  ?<button onClick={()=>setDrawingPunti(true)} style={{flex:1,padding:"9px",background:T.navActive,border:`1px solid ${T.blue+"66"}`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Aggiungi punti</button>
-                  :<button onClick={()=>setDrawingPunti(false)} style={{flex:1,padding:"9px",background:"#0d2010",border:`1px solid ${T.green+"55"}`,borderRadius:7,color:T.green,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>✓ Fine</button>
+                  ?<button onClick={()=>setDrawingPunti(true)} style={{flex:1,padding:"9px",background:T.navActive,border:`1px solid ${T.blue+"66"}`,borderRadius:6,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Aggiungi</button>
+                  :<button onClick={()=>setDrawingPunti(false)} style={{flex:1,padding:"9px",background:"#0d2010",border:`1px solid ${T.green+"55"}`,borderRadius:6,color:T.green,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>✓ Fine</button>
                 }
+                <button onClick={cancelPuntoEdit} style={{flex:1,background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:T.textSub,padding:"9px",cursor:"pointer",fontSize:13,fontFamily:T.font}}>Chiudi</button>
               </div>
             </div>
-
-            {/* punti list */}
-            {punti.length>0&&(
-              <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:14,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <div style={{fontSize:11,color:T.textSub,textTransform:"uppercase",letterSpacing:0.8,fontWeight:700}}>Punti ({punti.length})</div>
-                  <button onClick={()=>{ if(window.confirm("Eliminare tutti i punti?"))setPunti([]);}} style={{background:"none",border:"none",color:T.textDim,cursor:"pointer",fontSize:11,fontFamily:T.font}}>Cancella tutto</button>
-                </div>
-                {punti.map(p=>(
-                  <div key={p.id} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",marginBottom:6}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <div style={{width:10,height:10,borderRadius:"50%",background:p.color,flexShrink:0}}/>
-                      <span style={{fontSize:12,fontWeight:600,color:T.text,flex:1}}>{p.nome||"—"}</span>
-                      <button onClick={()=>deletePunto(p.id)} style={{background:"none",border:"none",color:T.red,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1}}>×</button>
-                    </div>
-                    {(p.comune||p.materiale||p.sector)&&<div style={{fontSize:10,color:T.textDim,marginTop:3,paddingLeft:18}}>{[p.comune,p.materiale,p.sector].filter(Boolean).join(" · ")}</div>}
-                    <div style={{fontSize:9,color:T.textDim,marginTop:2,paddingLeft:18,fontFamily:T.mono}}>{p.lat.toFixed(4)}, {p.lng.toFixed(4)}</div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 

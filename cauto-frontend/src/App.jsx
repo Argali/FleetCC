@@ -2320,7 +2320,7 @@ function Dashboard(){
       <div style={{width:W,background:T.sidebar,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",flexShrink:0,transition:"width 0.2s ease",overflow:"hidden"}}>
 
         {/* Logo */}
-        <div style={{padding:sidebarOpen?"18px 16px 16px":"14px 0 14px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:sidebarOpen?"flex-start":"center",gap:10,flexShrink:0}}>
+        <div style={{padding:sidebarOpen?"16px 16px":"16px 0",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:sidebarOpen?"flex-start":"center",gap:10,flexShrink:0}}>
           <FleetLogo size={32}/>
           {sidebarOpen&&(
             <div style={{minWidth:0}}>
@@ -2396,7 +2396,7 @@ function Dashboard(){
       {/* ── MAIN AREA ── */}
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         {/* Top bar */}
-        <div style={{padding:"14px 24px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:T.sidebar,flexShrink:0}}>
+        <div style={{padding:"16px 24px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:T.sidebar,flexShrink:0}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             {currentNav&&<span style={{color:T.textDim}}><Icon d={currentNav.icon} size={16}/></span>}
             <div>

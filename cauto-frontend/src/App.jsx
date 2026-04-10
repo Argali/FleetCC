@@ -552,6 +552,7 @@ const EMPTY_META={name:"",color:"#4ade80",opacity:0.85,comune:"",materiale:"",se
 
 const EMPTY_ZONE_CFG={type:"circle",name:"",comune:"",materiale:"",sector:"",fillColor:"#60a5fa",fillOpacity:0.3,borderColor:"#3a7bd5"};
 const EMPTY_PUNTO_CFG={nome:"",comune:"",materiale:"",sector:"",color:"#f87171"};
+const EMPTY_GRUPPO_CFG={name:"",color:"#60a5fa",routeIds:[],zoneIds:[],puntiIds:[]};
 
 function GPSModule({onSelectVehicle}){
   const {auth}=useAuth();
@@ -610,6 +611,21 @@ function GPSModule({onSelectVehicle}){
 
   const deletePunto=useCallback((id)=>setPunti(prev=>prev.filter(p=>p.id!==id)),[]);
   const cancelPuntoEdit=()=>{ setDrawingPunti(false); setEditingPunto(false); setPuntoCfg(EMPTY_PUNTO_CFG); };
+
+  // ── gruppi state ─────────────────────────────────────────────────────────
+  const [gruppi,setGruppi]=useState(()=>{ try{return JSON.parse(localStorage.getItem("fleetcc_gruppi")||"[]");}catch{return[];} });
+  const [puntiViewMode,setPuntiViewMode]=useState("items"); // "items" | "gruppi"
+  const [editingGruppo,setEditingGruppo]=useState(false);
+  const [gruppoCfg,setGruppoCfg]=useState(EMPTY_GRUPPO_CFG);
+  useEffect(()=>{ localStorage.setItem("fleetcc_gruppi",JSON.stringify(gruppi)); },[gruppi]);
+  const saveGruppo=()=>{
+    if(!gruppoCfg.name.trim())return;
+    setGruppi(prev=>[...prev,{...gruppoCfg,id:Date.now().toString()}]);
+    setEditingGruppo(false);
+    setGruppoCfg(EMPTY_GRUPPO_CFG);
+  };
+  const deleteGruppo=useCallback((id)=>setGruppi(prev=>prev.filter(g=>g.id!==id)),[]);
+  const toggleGruppoItem=(field,id)=>setGruppoCfg(c=>({...c,[field]:c[field].includes(id)?c[field].filter(x=>x!==id):[...c[field],id]}));
 
   const searchAddress=useCallback(async(q)=>{
     if(!q.trim()){setSearchResults([]);return;}
@@ -787,26 +803,6 @@ function GPSModule({onSelectVehicle}){
           </div>
         )}
 
-        {tab==="editor"&&!editingId&&(
-          <div style={{width:260,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
-            {(routes||[]).length===0&&<div style={{fontSize:13,color:T.textDim,textAlign:"center",marginTop:20}}>Nessun percorso</div>}
-            {(routes||[]).map(r=>(
-              <div key={r.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                  <div style={{width:12,height:12,borderRadius:"50%",background:r.color,flexShrink:0}}/>
-                  <span style={{fontSize:13,fontWeight:600,color:T.text,flex:1}}>{r.name}</span>
-                  <span style={{fontSize:9,color:T.textDim,background:T.bg,padding:"2px 6px",borderRadius:4}}>{Math.round((r.opacity??0.85)*100)}%</span>
-                </div>
-                <div style={{fontSize:11,color:T.textSub,marginBottom:10}}>{[r.comune,r.materiale,r.sector].filter(Boolean).join(" · ")||"—"} · {r.waypoints.length} pt</div>
-                <div style={{display:"flex",gap:6}}>
-                  {canEdit&&<button onClick={()=>startEdit(r)} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"5px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Modifica</button>}
-                  {canEdit&&<button onClick={()=>deleteRoute(r.id)} style={{background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:6,color:T.red,padding:"5px 10px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Elimina</button>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
         <div style={{flex:1,borderRadius:12,border:`1px solid ${T.border}`,position:"relative",overflow:"hidden"}}>
           {(tab==="live"||tab==="editor")&&<FleetMap
             vehicles={vehicles} routes={routes||[]} visibleRoutes={visibleRoutes}
@@ -924,6 +920,27 @@ function GPSModule({onSelectVehicle}){
           {tab==="live"&&<div style={{position:"absolute",bottom:10,left:10,zIndex:1000,fontSize:10,color:T.textSub,fontFamily:T.mono,background:"rgba(13,27,42,0.85)",padding:"4px 10px",borderRadius:6}}>Aggiornamento ogni 10s · Visirun mock</div>}
         </div>
 
+        {/* ── EDITOR PERCORSI: list ── */}
+        {tab==="editor"&&!editingId&&(
+          <div style={{width:260,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
+            {(routes||[]).length===0&&<div style={{fontSize:13,color:T.textDim,textAlign:"center",marginTop:20}}>Nessun percorso</div>}
+            {(routes||[]).map(r=>(
+              <div key={r.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                  <div style={{width:12,height:12,borderRadius:"50%",background:r.color,flexShrink:0}}/>
+                  <span style={{fontSize:13,fontWeight:600,color:T.text,flex:1}}>{r.name}</span>
+                  <span style={{fontSize:9,color:T.textDim,background:T.bg,padding:"2px 6px",borderRadius:4}}>{Math.round((r.opacity??0.85)*100)}%</span>
+                </div>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:10}}>{[r.comune,r.materiale,r.sector].filter(Boolean).join(" · ")||"—"} · {r.waypoints.length} pt</div>
+                <div style={{display:"flex",gap:6}}>
+                  {canEdit&&<button onClick={()=>startEdit(r)} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"5px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Modifica</button>}
+                  {canEdit&&<button onClick={()=>deleteRoute(r.id)} style={{background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:6,color:T.red,padding:"5px 10px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Elimina</button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ── EDITOR ZONE: list (matches percorsi layout) ── */}
         {tab==="zone"&&!editingZone&&(
           <div style={{width:260,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
@@ -1007,21 +1024,132 @@ function GPSModule({onSelectVehicle}){
           </div>
         )}
 
-        {/* ── EDITOR PUNTI: list ── */}
+        {/* ── EDITOR PUNTI: list / gruppi ── */}
         {tab==="punti"&&!editingPunto&&(
-          <div style={{width:260,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
-            {punti.length===0&&<div style={{fontSize:13,color:T.textDim,textAlign:"center",marginTop:20}}>Nessun punto</div>}
-            {punti.map(p=>(
-              <div key={p.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-                  <div style={{width:11,height:11,borderRadius:"50%",background:p.color,flexShrink:0,border:"2px solid #fff",boxShadow:`0 0 0 1px ${p.color}`}}/>
-                  <span style={{fontSize:13,fontWeight:600,color:T.text,flex:1}}>{p.nome||"—"}</span>
+          <div style={{width:260,display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flexShrink:0}}>
+            {/* view toggle */}
+            <div style={{display:"flex",gap:3,background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:3,flexShrink:0}}>
+              {[["items","Punti"],["gruppi","Gruppi"]].map(([mode,label])=>(
+                <button key={mode} onClick={()=>{setPuntiViewMode(mode);setEditingGruppo(false);setGruppoCfg(EMPTY_GRUPPO_CFG);}}
+                  style={{flex:1,padding:"5px",borderRadius:6,border:"none",background:puntiViewMode===mode?T.card:"transparent",color:puntiViewMode===mode?T.text:T.textSub,cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:puntiViewMode===mode?700:400}}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── punti list ── */}
+            {puntiViewMode==="items"&&(
+              <>
+                {punti.length===0&&<div style={{fontSize:13,color:T.textDim,textAlign:"center",marginTop:20}}>Nessun punto</div>}
+                {punti.map(p=>(
+                  <div key={p.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                      <div style={{width:11,height:11,borderRadius:"50%",background:p.color,flexShrink:0,border:"2px solid #fff",boxShadow:`0 0 0 1px ${p.color}`}}/>
+                      <span style={{fontSize:13,fontWeight:600,color:T.text,flex:1}}>{p.nome||"—"}</span>
+                    </div>
+                    <div style={{fontSize:11,color:T.textSub,marginBottom:4}}>{[p.comune,p.materiale,p.sector].filter(Boolean).join(" · ")||"—"}</div>
+                    <div style={{fontSize:9,color:T.textDim,marginBottom:10,fontFamily:T.mono}}>{p.lat.toFixed(4)}, {p.lng.toFixed(4)}</div>
+                    <button onClick={()=>deletePunto(p.id)} style={{width:"100%",background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:6,color:T.red,padding:"5px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Elimina</button>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* ── gruppi list ── */}
+            {puntiViewMode==="gruppi"&&!editingGruppo&&(
+              <>
+                <button onClick={()=>setEditingGruppo(true)} style={{padding:"7px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,flexShrink:0}}>+ Nuovo gruppo</button>
+                {gruppi.length===0&&<div style={{fontSize:13,color:T.textDim,textAlign:"center",marginTop:12}}>Nessun gruppo</div>}
+                {gruppi.map(g=>(
+                  <div key={g.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                      <div style={{width:10,height:10,borderRadius:"50%",background:g.color,flexShrink:0}}/>
+                      <span style={{fontSize:13,fontWeight:700,color:T.text,flex:1}}>{g.name}</span>
+                    </div>
+                    <div style={{display:"flex",gap:10,marginBottom:10,fontSize:10,color:T.textSub,flexWrap:"wrap"}}>
+                      {g.routeIds.length>0&&<span>🛣 {g.routeIds.length} percorsi</span>}
+                      {g.zoneIds.length>0&&<span>⬡ {g.zoneIds.length} zone</span>}
+                      {g.puntiIds.length>0&&<span>📍 {g.puntiIds.length} punti</span>}
+                      {g.routeIds.length+g.zoneIds.length+g.puntiIds.length===0&&<span style={{color:T.textDim}}>Vuoto</span>}
+                    </div>
+                    <button onClick={()=>deleteGruppo(g.id)} style={{width:"100%",background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:6,color:T.red,padding:"5px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Elimina</button>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* ── nuovo gruppo form ── */}
+            {puntiViewMode==="gruppi"&&editingGruppo&&(
+              <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+                <div style={{fontSize:14,fontWeight:700,color:T.text,marginBottom:14}}>Nuovo gruppo</div>
+                <div style={{marginBottom:11}}>
+                  <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Nome</div>
+                  <input value={gruppoCfg.name} onChange={e=>setGruppoCfg(c=>({...c,name:e.target.value}))}
+                    style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"7px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
                 </div>
-                <div style={{fontSize:11,color:T.textSub,marginBottom:4}}>{[p.comune,p.materiale,p.sector].filter(Boolean).join(" · ")||"—"}</div>
-                <div style={{fontSize:9,color:T.textDim,marginBottom:10,fontFamily:T.mono}}>{p.lat.toFixed(4)}, {p.lng.toFixed(4)}</div>
-                <button onClick={()=>deletePunto(p.id)} style={{width:"100%",background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:6,color:T.red,padding:"5px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Elimina</button>
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:11,color:T.textSub,marginBottom:5,fontWeight:600}}>Colore</div>
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                    {["#60a5fa","#4ade80","#fb923c","#f87171","#c084fc","#facc15","#34d399","#f9a8d4"].map(c=>(
+                      <div key={c} onClick={()=>setGruppoCfg(g=>({...g,color:c}))}
+                        style={{width:20,height:20,borderRadius:"50%",background:c,cursor:"pointer",flexShrink:0,border:gruppoCfg.color===c?"3px solid #fff":"2px solid transparent",boxShadow:gruppoCfg.color===c?"0 0 0 1px #000":"none"}}/>
+                    ))}
+                  </div>
+                </div>
+                {(routes&&routes.length>0)&&(
+                  <div style={{marginBottom:11}}>
+                    <div style={{fontSize:11,color:T.textSub,marginBottom:5,fontWeight:600}}>Percorsi</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:3,maxHeight:90,overflowY:"auto"}}>
+                      {routes.map(r=>(
+                        <label key={r.id} style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",padding:"4px 6px",borderRadius:5,background:gruppoCfg.routeIds.includes(r.id)?T.navActive:"transparent"}}>
+                          <input type="checkbox" checked={gruppoCfg.routeIds.includes(r.id)} onChange={()=>toggleGruppoItem("routeIds",r.id)} style={{accentColor:T.blue}}/>
+                          <div style={{width:8,height:8,borderRadius:"50%",background:r.color,flexShrink:0}}/>
+                          <span style={{fontSize:11,color:T.text}}>{r.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {zones.length>0&&(
+                  <div style={{marginBottom:11}}>
+                    <div style={{fontSize:11,color:T.textSub,marginBottom:5,fontWeight:600}}>Zone</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:3,maxHeight:90,overflowY:"auto"}}>
+                      {zones.map(z=>(
+                        <label key={z.id} style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",padding:"4px 6px",borderRadius:5,background:gruppoCfg.zoneIds.includes(z.id)?T.navActive:"transparent"}}>
+                          <input type="checkbox" checked={gruppoCfg.zoneIds.includes(z.id)} onChange={()=>toggleGruppoItem("zoneIds",z.id)} style={{accentColor:T.blue}}/>
+                          <div style={{width:10,height:10,background:z.fillColor,border:`1px solid ${z.borderColor}`,borderRadius:z.type==="circle"?"50%":"2px",flexShrink:0}}/>
+                          <span style={{fontSize:11,color:T.text}}>{z.name||z.type}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {punti.length>0&&(
+                  <div style={{marginBottom:12}}>
+                    <div style={{fontSize:11,color:T.textSub,marginBottom:5,fontWeight:600}}>Punti</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:3,maxHeight:90,overflowY:"auto"}}>
+                      {punti.map(p=>(
+                        <label key={p.id} style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer",padding:"4px 6px",borderRadius:5,background:gruppoCfg.puntiIds.includes(p.id)?T.navActive:"transparent"}}>
+                          <input type="checkbox" checked={gruppoCfg.puntiIds.includes(p.id)} onChange={()=>toggleGruppoItem("puntiIds",p.id)} style={{accentColor:T.blue}}/>
+                          <div style={{width:10,height:10,borderRadius:"50%",background:p.color,flexShrink:0}}/>
+                          <span style={{fontSize:11,color:T.text}}>{p.nome||"—"}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={saveGruppo} disabled={!gruppoCfg.name.trim()}
+                    style={{flex:1,background:!gruppoCfg.name.trim()?T.bg:T.navActive,border:`1px solid ${!gruppoCfg.name.trim()?T.border:T.blue+"66"}`,borderRadius:6,color:!gruppoCfg.name.trim()?T.textDim:T.blue,padding:"9px",cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+                    Salva
+                  </button>
+                  <button onClick={()=>{setEditingGruppo(false);setGruppoCfg(EMPTY_GRUPPO_CFG);}}
+                    style={{flex:1,background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:T.textSub,padding:"9px",cursor:"pointer",fontSize:13,fontFamily:T.font}}>
+                    Annulla
+                  </button>
+                </div>
               </div>
-            ))}
+            )}
           </div>
         )}
 

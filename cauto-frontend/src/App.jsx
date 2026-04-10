@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, createContext, useContext, useRef } f
 import { msalInstance, loginRequest } from "./msalConfig.js";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { Stage, Layer, Rect as KonvaRect, Ellipse as KonvaEllipse, Line as KonvaLine, Text as KonvaText, Transformer as KonvaTransformer } from "react-konva";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
@@ -553,6 +554,7 @@ const EMPTY_META={name:"",color:"#4ade80",opacity:0.85,comune:"",materiale:"",se
 const EMPTY_ZONE_CFG={type:"circle",name:"",comune:"",materiale:"",sector:"",fillColor:"#60a5fa",fillOpacity:0.3,borderColor:"#3a7bd5"};
 const EMPTY_PUNTO_CFG={nome:"",comune:"",materiale:"",sector:"",color:"#f87171"};
 const EMPTY_GRUPPO_CFG={name:"",color:"#60a5fa",routeIds:[],zoneIds:[],puntiIds:[]};
+const EMPTY_CDR_META={name:"",comune:"",materiale:"",sector:"",color:"#60a5fa",opacity:0.5};
 
 function GPSModule({onSelectVehicle}){
   const {auth}=useAuth();
@@ -628,6 +630,24 @@ function GPSModule({onSelectVehicle}){
   };
   const deleteGruppo=useCallback((id)=>setGruppi(prev=>prev.filter(g=>g.id!==id)),[]);
   const toggleGruppoItem=(field,id)=>setGruppoCfg(c=>({...c,[field]:c[field].includes(id)?c[field].filter(x=>x!==id):[...c[field],id]}));
+
+  // ── centri di raccolta state ──────────────────────────────────────────────
+  const [cdr,setCdr]=useState(()=>{try{return JSON.parse(localStorage.getItem("fleetcc_cdr")||"[]");}catch{return[];}});
+  const [editingCdr,setEditingCdr]=useState(null);
+  const [cdrMeta,setCdrMeta]=useState(EMPTY_CDR_META);
+  const [cdrShapes,setCdrShapes]=useState([]);
+  useEffect(()=>{localStorage.setItem("fleetcc_cdr",JSON.stringify(cdr));},[cdr]);
+  const startNewCdr=()=>{setEditingCdr("new");setCdrMeta({...EMPTY_CDR_META});setCdrShapes([]);};
+  const editCdrItem=(c)=>{setEditingCdr(c.id);setCdrMeta({name:c.name,comune:c.comune||"",materiale:c.materiale||"",sector:c.sector||"",color:c.color,opacity:c.opacity??0.5});setCdrShapes(c.shapes||[]);};
+  const cancelCdrEdit=()=>{setEditingCdr(null);setCdrMeta(EMPTY_CDR_META);setCdrShapes([]);};
+  const saveCdr=()=>{
+    if(!cdrMeta.name.trim())return;
+    const entry={...cdrMeta,shapes:cdrShapes};
+    if(editingCdr==="new")setCdr(prev=>[...prev,{id:Date.now().toString(),...entry}]);
+    else setCdr(prev=>prev.map(c=>c.id===editingCdr?{...c,...entry}:c));
+    cancelCdrEdit();
+  };
+  const deleteCdr=(id)=>{if(window.confirm("Eliminare questo centro di raccolta?"))setCdr(prev=>prev.filter(c=>c.id!==id));};
 
   const searchAddress=useCallback(async(q)=>{
     if(!q.trim()){setSearchResults([]);return;}
@@ -748,12 +768,13 @@ function GPSModule({onSelectVehicle}){
     {id:"editor",  label:"Editor Percorsi",icon:"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"},
     {id:"zone",    label:"Editor Zone",    icon:"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"},
     {id:"punti",   label:"Editor Punti",   icon:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z M12 10m-3 0a3 3 0 1 0 6 0 3 3 0 1 0-6 0"},
+    {id:"cdr",     label:"Centri di Raccolta", icon:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10"},
   ];
 
   return(
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 130px)",fontFamily:T.font}}>
       <div style={{display:"flex",alignItems:"center",gap:0,flexShrink:0}}>
-        <TabBar tabs={gpsTabs} active={tab} onChange={(t)=>{setTab(t);cancelEdit();}}/>
+        <TabBar tabs={gpsTabs} active={tab} onChange={(t)=>{setTab(t);cancelEdit();cancelCdrEdit();}}/>
         <div style={{marginLeft:"auto",marginBottom:20,display:"flex",gap:8}}>
           {tab==="editor"&&canEdit&&!editingId&&(
             <>
@@ -781,6 +802,12 @@ function GPSModule({onSelectVehicle}){
           )}
           {tab==="punti"&&editingPunto&&drawingPunti&&(
             <span style={{fontSize:11,color:T.textSub,display:"flex",alignItems:"center"}}>Modalità attiva — click sulla mappa per aggiungere</span>
+          )}
+          {tab==="cdr"&&canEdit&&!editingCdr&&(
+            <button onClick={startNewCdr} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuovo Centro</button>
+          )}
+          {tab==="cdr"&&editingCdr&&(
+            <span style={{fontSize:11,color:T.textSub,display:"flex",alignItems:"center"}}>Disegna la planimetria del centro — usa gli strumenti nella toolbar</span>
           )}
         </div>
       </div>
@@ -978,6 +1005,20 @@ function GPSModule({onSelectVehicle}){
             </div>
           )}
           {tab==="live"&&<div style={{position:"absolute",bottom:10,left:10,zIndex:1000,fontSize:10,color:T.textSub,fontFamily:T.mono,background:"rgba(13,27,42,0.85)",padding:"4px 10px",borderRadius:6}}>Aggiornamento ogni 10s · Visirun mock</div>}
+          {/* ── CDR: placeholder (list mode) ── */}
+          {tab==="cdr"&&!editingCdr&&(
+            <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,background:"#0e1822"}}>
+              <div style={{fontSize:48,opacity:0.1}}>🏭</div>
+              <div style={{fontSize:14,fontWeight:600,color:T.textSub}}>Centri di Raccolta</div>
+              <div style={{fontSize:12,color:T.textDim}}>Seleziona un centro o creane uno nuovo</div>
+            </div>
+          )}
+          {/* ── CDR: Konva canvas (edit mode) ── */}
+          {tab==="cdr"&&editingCdr&&(
+            <div style={{position:"absolute",inset:0}}>
+              <CdrCanvas shapes={cdrShapes} onChange={setCdrShapes} activeColor={cdrMeta.color} activeOpacity={cdrMeta.opacity??0.5}/>
+            </div>
+          )}
         </div>
 
         {/* ── EDITOR PERCORSI: list / gruppi ── */}
@@ -1475,6 +1516,70 @@ function GPSModule({onSelectVehicle}){
           </div>
         )}
 
+        {/* ── CDR: list ── */}
+        {tab==="cdr"&&!editingCdr&&(
+          <div style={{width:260,display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flexShrink:0}}>
+            {cdr.length===0&&<div style={{fontSize:13,color:T.textDim,textAlign:"center",marginTop:20}}>Nessun centro di raccolta</div>}
+            {cdr.map(c=>(
+              <div key={c.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                  <div style={{width:12,height:12,borderRadius:"50%",background:c.color,flexShrink:0}}/>
+                  <span style={{fontSize:13,fontWeight:600,color:T.text,flex:1}}>{c.name}</span>
+                  <span style={{fontSize:9,color:T.textDim,background:T.bg,padding:"2px 6px",borderRadius:4}}>{(c.shapes||[]).length} forme</span>
+                </div>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:10}}>{[c.comune,c.materiale,c.sector].filter(Boolean).join(" · ")||"—"}</div>
+                <div style={{display:"flex",gap:6}}>
+                  {canEdit&&<button onClick={()=>editCdrItem(c)} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"5px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Modifica</button>}
+                  {canEdit&&<button onClick={()=>deleteCdr(c.id)} style={{background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:6,color:T.red,padding:"5px 10px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Elimina</button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── CDR: form ── */}
+        {tab==="cdr"&&editingCdr&&(
+          <div style={{width:260,display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flexShrink:0}}>
+            <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:16,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+              <div style={{fontSize:14,fontWeight:700,color:T.text,marginBottom:16}}>{editingCdr==="new"?"Nuovo Centro":"Modifica Centro"}</div>
+              {[["Nome","name"],["Comune","comune"],["Materiale","materiale"],["Settore","sector"]].map(([lbl,key])=>(
+                <div key={key} style={{marginBottom:12}}>
+                  <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>{lbl}</div>
+                  <input value={cdrMeta[key]||""} onChange={e=>setCdrMeta(m=>({...m,[key]:e.target.value}))}
+                    style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"8px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+              ))}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:6,fontWeight:600}}>Colore</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                  {["#4ade80","#60a5fa","#fb923c","#c084fc","#f9a8d4","#facc15","#f87171","#34d399"].map(c=>(
+                    <div key={c} onClick={()=>setCdrMeta(m=>({...m,color:c}))} style={{width:24,height:24,borderRadius:"50%",background:c,border:cdrMeta.color===c?"3px solid #fff":"2px solid transparent",cursor:"pointer",flexShrink:0,boxShadow:cdrMeta.color===c?"0 0 0 1px #000":"none"}}/>
+                  ))}
+                </div>
+                <input type="color" value={cdrMeta.color} onChange={e=>setCdrMeta(m=>({...m,color:e.target.value}))}
+                  style={{width:"100%",height:32,border:"none",borderRadius:6,cursor:"pointer",background:"none",padding:2}}/>
+              </div>
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Trasparenza: {Math.round((cdrMeta.opacity??0.5)*100)}%</div>
+                <input type="range" min={5} max={100} step={5} value={Math.round((cdrMeta.opacity??0.5)*100)}
+                  onChange={e=>setCdrMeta(m=>({...m,opacity:Number(e.target.value)/100}))}
+                  style={{width:"100%",accentColor:cdrMeta.color}}/>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:T.textDim,marginTop:2}}><span>Trasparente</span><span>Pieno</span></div>
+              </div>
+              <div style={{fontSize:11,color:T.textSub,marginBottom:14,padding:"10px 12px",background:T.bg,borderRadius:6,border:`1px solid ${T.border}`}}>
+                {cdrShapes.length} forme nel canvas
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={saveCdr} disabled={!cdrMeta.name.trim()}
+                  style={{flex:1,background:!cdrMeta.name.trim()?T.bg:T.navActive,border:`1px solid ${!cdrMeta.name.trim()?T.border:T.blue+"66"}`,borderRadius:6,color:!cdrMeta.name.trim()?T.textDim:T.blue,padding:"9px",cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+                  Salva
+                </button>
+                <button onClick={cancelCdrEdit} style={{flex:1,background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:T.textSub,padding:"9px",cursor:"pointer",fontSize:13,fontFamily:T.font}}>Annulla</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── EDITOR PERCORSI with editing form ── */}
         {tab==="editor"&&editingId&&(
           <div style={{width:260,display:"flex",flexDirection:"column",gap:10,overflowY:"auto"}}>
@@ -1514,6 +1619,163 @@ function GPSModule({onSelectVehicle}){
                 <button onClick={cancelEdit} style={{flex:1,background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:T.textSub,padding:"9px",cursor:"pointer",fontSize:13,fontFamily:T.font}}>Annulla</button>
               </div>
             </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── CDR CANVAS (Konva.js) ────────────────────────────────────────────────────
+function CdrCanvas({shapes,onChange,activeColor,activeOpacity}){
+  const containerRef=useRef(null);
+  const stageRef=useRef(null);
+  const trRef=useRef(null);
+  const [size,setSize]=useState({w:800,h:500});
+  const [tool,setTool]=useState("select");
+  const [selectedId,setSelectedId]=useState(null);
+  const [isDrawing,setIsDrawing]=useState(false);
+  const [drawStart,setDrawStart]=useState(null);
+  const [preview,setPreview]=useState(null);
+  const [polyPts,setPolyPts]=useState([]);
+  const [textInput,setTextInput]=useState(null);
+  const [textVal,setTextVal]=useState("");
+
+  useEffect(()=>{
+    const el=containerRef.current;if(!el)return;
+    const ro=new ResizeObserver(entries=>{
+      const{width,height}=entries[0].contentRect;
+      if(width>10&&height>10)setSize({w:Math.floor(width),h:Math.floor(height)});
+    });
+    ro.observe(el);return()=>ro.disconnect();
+  },[]);
+
+  useEffect(()=>{
+    if(!trRef.current||!stageRef.current)return;
+    const node=selectedId?stageRef.current.findOne("#"+selectedId):null;
+    trRef.current.nodes(node?[node]:[]);
+    trRef.current.getLayer()?.batchDraw();
+  },[selectedId,shapes]);
+
+  const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  const fillC=activeColor+Math.round((activeOpacity??0.5)*255).toString(16).padStart(2,"0");
+  const getStagePt=e=>{const st=stageRef.current;st.setPointersPositions(e);return st.getPointerPosition();};
+
+  const onMouseDown=e=>{
+    if(tool==="select"){if(e.target===stageRef.current)setSelectedId(null);return;}
+    const pos=getStagePt(e.evt);
+    if(tool==="text"){setTextInput(pos);return;}
+    if(tool==="polygon"){setPolyPts(p=>[...p,pos.x,pos.y]);return;}
+    setDrawStart(pos);setIsDrawing(true);
+    const base={id:null,fill:fillC,stroke:activeColor,strokeWidth:2};
+    if(tool==="rect")setPreview({...base,type:"rect",x:pos.x,y:pos.y,width:0,height:0});
+    if(tool==="ellipse")setPreview({...base,type:"ellipse",x:pos.x,y:pos.y,radiusX:0,radiusY:0});
+    if(tool==="line")setPreview({...base,type:"line",points:[pos.x,pos.y,pos.x,pos.y]});
+  };
+
+  const onMouseMove=e=>{
+    if(!isDrawing||!drawStart)return;
+    const pos=getStagePt(e.evt);
+    if(tool==="rect")setPreview(p=>({...p,x:Math.min(drawStart.x,pos.x),y:Math.min(drawStart.y,pos.y),width:Math.abs(pos.x-drawStart.x),height:Math.abs(pos.y-drawStart.y)}));
+    if(tool==="ellipse")setPreview(p=>({...p,x:(drawStart.x+pos.x)/2,y:(drawStart.y+pos.y)/2,radiusX:Math.abs(pos.x-drawStart.x)/2,radiusY:Math.abs(pos.y-drawStart.y)/2}));
+    if(tool==="line")setPreview(p=>({...p,points:[drawStart.x,drawStart.y,pos.x,pos.y]}));
+  };
+
+  const onMouseUp=()=>{
+    if(!isDrawing||!preview){setIsDrawing(false);return;}
+    setIsDrawing(false);
+    const ok=(preview.type==="rect"&&preview.width>4&&preview.height>4)||
+             (preview.type==="ellipse"&&preview.radiusX>4&&preview.radiusY>4)||
+             (preview.type==="line"&&Math.hypot(preview.points[2]-preview.points[0],preview.points[3]-preview.points[1])>4);
+    if(ok)onChange([...shapes,{...preview,id:newId()}]);
+    setPreview(null);setDrawStart(null);
+  };
+
+  const onDblClick=()=>{
+    if(tool==="polygon"&&polyPts.length>=6){
+      onChange([...shapes,{id:newId(),type:"polygon",points:[...polyPts],fill:fillC,stroke:activeColor,strokeWidth:2,closed:true}]);
+      setPolyPts([]);
+    }
+  };
+
+  const commitText=()=>{
+    if(!textVal.trim()||!textInput)return;
+    onChange([...shapes,{id:newId(),type:"text",x:textInput.x,y:textInput.y,text:textVal,fontSize:14,fill:activeColor}]);
+    setTextInput(null);setTextVal("");
+  };
+
+  const deleteSelected=()=>{
+    if(!selectedId)return;
+    onChange(shapes.filter(s=>s.id!==selectedId));
+    setSelectedId(null);
+  };
+
+  const updShape=(id,attrs)=>onChange(shapes.map(s=>s.id===id?{...s,...attrs}:s));
+
+  const sp=s=>({
+    id:s.id,key:s.id,
+    draggable:tool==="select",
+    onClick:()=>{if(tool==="select")setSelectedId(s.id);},
+    onDragEnd:e=>updShape(s.id,{x:e.target.x(),y:e.target.y()}),
+    onTransformEnd:e=>{
+      const n=e.target;
+      if(s.type==="rect")updShape(s.id,{x:n.x(),y:n.y(),width:Math.max(5,n.width()*n.scaleX()),height:Math.max(5,n.height()*n.scaleY()),rotation:n.rotation()});
+      if(s.type==="ellipse")updShape(s.id,{x:n.x(),y:n.y(),radiusX:Math.max(5,n.radiusX()*n.scaleX()),radiusY:Math.max(5,n.radiusY()*n.scaleY()),rotation:n.rotation()});
+      n.scaleX(1);n.scaleY(1);
+    }
+  });
+
+  const TOOLS=[["select","↖ Seleziona"],["rect","▭ Rettangolo"],["ellipse","⬭ Ellisse"],["polygon","⬡ Poligono"],["line","╲ Linea"],["text","T Testo"]];
+  const GRID=40;
+  const gridLines=[];
+  for(let x=0;x<=size.w;x+=GRID)gridLines.push(<KonvaLine key={"gv"+x} points={[x,0,x,size.h]} stroke="#ffffff09" strokeWidth={1} listening={false}/>);
+  for(let y=0;y<=size.h;y+=GRID)gridLines.push(<KonvaLine key={"gh"+y} points={[0,y,size.w,y]} stroke="#ffffff09" strokeWidth={1} listening={false}/>);
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
+      {/* toolbar */}
+      <div style={{display:"flex",gap:5,padding:"8px 12px",borderBottom:`1px solid ${T.border}`,background:T.card,flexShrink:0,flexWrap:"wrap",alignItems:"center"}}>
+        {TOOLS.map(([t,lbl])=>(
+          <button key={t} onClick={()=>{setTool(t);setPolyPts([]);setTextInput(null);setTextVal("");}}
+            style={{padding:"4px 10px",borderRadius:6,border:`1px solid ${tool===t?T.blue+"66":T.border}`,background:tool===t?T.navActive:"transparent",color:tool===t?T.blue:T.textSub,cursor:"pointer",fontSize:11,fontFamily:T.font,fontWeight:tool===t?700:400}}>
+            {lbl}
+          </button>
+        ))}
+        <div style={{width:1,height:18,background:T.border,margin:"0 2px"}}/>
+        {selectedId&&<button onClick={deleteSelected} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #3a1a1a",background:"#1a0808",color:T.red,cursor:"pointer",fontSize:11,fontFamily:T.font}}>✕ Elimina</button>}
+        {tool==="polygon"&&<span style={{fontSize:10,color:T.textSub}}>{polyPts.length<6?"Almeno 3 click · ":""}Doppio click per chiudere</span>}
+        <button onClick={()=>{if(window.confirm("Cancellare tutte le forme?")){onChange([]);setSelectedId(null);}}} style={{marginLeft:"auto",padding:"4px 10px",borderRadius:6,border:`1px solid ${T.border}`,background:"transparent",color:T.textDim,cursor:"pointer",fontSize:11,fontFamily:T.font}}>🗑 Tutto</button>
+      </div>
+      {/* stage */}
+      <div ref={containerRef} style={{flex:1,overflow:"hidden",position:"relative",cursor:tool==="select"?"default":"crosshair"}}>
+        <Stage ref={stageRef} width={size.w} height={size.h}
+          onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onDblClick={onDblClick}
+          style={{background:"#0e1822"}}>
+          <Layer>
+            {gridLines}
+            {shapes.map(s=>{
+              const p=sp(s);
+              if(s.type==="rect")return<KonvaRect {...p} x={s.x} y={s.y} width={s.width} height={s.height} fill={s.fill} stroke={s.stroke} strokeWidth={s.strokeWidth} rotation={s.rotation||0}/>;
+              if(s.type==="ellipse")return<KonvaEllipse {...p} x={s.x} y={s.y} radiusX={s.radiusX} radiusY={s.radiusY} fill={s.fill} stroke={s.stroke} strokeWidth={s.strokeWidth} rotation={s.rotation||0}/>;
+              if(s.type==="polygon")return<KonvaLine {...p} points={s.points} fill={s.fill} stroke={s.stroke} strokeWidth={s.strokeWidth} closed={s.closed}/>;
+              if(s.type==="line")return<KonvaLine {...p} points={s.points} stroke={s.stroke} strokeWidth={s.strokeWidth}/>;
+              if(s.type==="text")return<KonvaText {...p} x={s.x} y={s.y} text={s.text} fontSize={s.fontSize} fill={s.fill} rotation={s.rotation||0}/>;
+              return null;
+            })}
+            {preview?.type==="rect"&&<KonvaRect x={preview.x} y={preview.y} width={preview.width} height={preview.height} fill={preview.fill} stroke={preview.stroke} strokeWidth={2} opacity={0.6} listening={false}/>}
+            {preview?.type==="ellipse"&&<KonvaEllipse x={preview.x} y={preview.y} radiusX={preview.radiusX} radiusY={preview.radiusY} fill={preview.fill} stroke={preview.stroke} strokeWidth={2} opacity={0.6} listening={false}/>}
+            {preview?.type==="line"&&<KonvaLine points={preview.points} stroke={preview.stroke} strokeWidth={preview.strokeWidth} opacity={0.6} listening={false}/>}
+            {polyPts.length>=2&&<KonvaLine points={polyPts} stroke={activeColor} strokeWidth={2} dash={[5,3]} listening={false}/>}
+            <KonvaTransformer ref={trRef} boundBoxFunc={(_,nw)=>({...nw,width:Math.max(5,nw.width),height:Math.max(5,nw.height)})}/>
+          </Layer>
+        </Stage>
+        {textInput&&(
+          <div style={{position:"absolute",left:textInput.x,top:textInput.y,zIndex:10,display:"flex",gap:4,transform:"translate(0,-50%)"}}>
+            <input autoFocus value={textVal} onChange={e=>setTextVal(e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter")commitText();if(e.key==="Escape"){setTextInput(null);setTextVal("");}}}
+              style={{background:T.card,border:`1px solid ${T.blue}`,borderRadius:4,color:T.text,padding:"4px 8px",fontSize:13,fontFamily:T.font,outline:"none",minWidth:120}}
+              placeholder="Testo..."/>
+            <button onClick={commitText} style={{background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:4,color:T.blue,padding:"4px 8px",cursor:"pointer",fontSize:12}}>✓</button>
           </div>
         )}
       </div>

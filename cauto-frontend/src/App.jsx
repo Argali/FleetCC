@@ -664,6 +664,57 @@ function GPSModule({onSelectVehicle}){
   const startEdit=(r)=>{setEditingId(r.id);setEditWaypoints(r.waypoints.map(wp=>[...wp]));setMeta({name:r.name,color:r.color,opacity:r.opacity??0.85,comune:r.comune||"",materiale:r.materiale||"",sector:r.sector||""});};
   const startNew=()=>{setEditingId("new");setEditWaypoints([]);setMeta({...EMPTY_META});};
   const cancelEdit=()=>{setEditingId(null);setEditWaypoints([]);setMeta(EMPTY_META);};
+
+  // ── CSV import ────────────────────────────────────────────────────────────
+  const csvInputRef=useRef(null);
+  const [csvError,setCsvError]=useState(null);
+
+  const parseCSVCoords=(text)=>{
+    const sep=text.includes(";")?";":","
+    const lines=text.trim().split(/\r?\n/).filter(l=>l.trim());
+    if(lines.length<1)return null;
+    // detect header vs pure numeric first row
+    const firstCells=lines[0].split(sep).map(c=>c.trim().replace(/['"]/g,""));
+    const firstIsData=firstCells.every(c=>!isNaN(parseFloat(c))&&c!=="");
+    let latIdx=-1,lngIdx=-1,dataStart=1,defaultName="";
+    if(firstIsData){
+      // no header: assume first two columns are lat,lng
+      latIdx=0;lngIdx=1;dataStart=0;
+    } else {
+      const header=firstCells.map(h=>h.toLowerCase());
+      latIdx=header.findIndex(h=>["lat","latitude","y","nord","n"].includes(h));
+      lngIdx=header.findIndex(h=>["lon","lng","longitude","x","est","e"].includes(h));
+      if(latIdx===-1||lngIdx===-1)return null;
+      const nameIdx=header.findIndex(h=>["name","nome","percorso"].includes(h));
+      if(nameIdx!==-1)defaultName=lines[1]?.split(sep)[nameIdx]?.trim().replace(/['"]/g,"")||"";
+    }
+    const coords=[];
+    for(let i=dataStart;i<lines.length;i++){
+      const parts=lines[i].split(sep).map(p=>p.trim().replace(/['"]/g,""));
+      const lat=parseFloat(parts[latIdx]),lng=parseFloat(parts[lngIdx]);
+      if(!isNaN(lat)&&!isNaN(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180)coords.push([lat,lng]);
+    }
+    return coords.length>=2?{coords,defaultName}:null;
+  };
+
+  const handleCSVFile=(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    e.target.value="";
+    const reader=new FileReader();
+    reader.onload=(ev)=>{
+      const result=parseCSVCoords(ev.target.result);
+      if(!result){
+        setCsvError("CSV non valido. Servono colonne lat/lng (o latitude/longitude). Min. 2 punti.");
+        setTimeout(()=>setCsvError(null),6000);return;
+      }
+      const {coords,defaultName}=result;
+      const name=defaultName||(file.name.replace(/\.[^.]+$/,""));
+      setEditingId("new");
+      setEditWaypoints(coords);
+      setMeta({...EMPTY_META,name});
+    };
+    reader.readAsText(file);
+  };
   const handleMapClick=useCallback((latlng)=>{ if(editingId!==null)setEditWaypoints(prev=>[...prev,latlng]); },[editingId]);
   const handleWaypointMove=useCallback((idx,latlng)=>{ setEditWaypoints(prev=>prev.map((wp,i)=>i===idx?latlng:wp)); },[]);
   const handleWaypointDelete=useCallback((idx)=>{ setEditWaypoints(prev=>prev.filter((_,i)=>i!==idx)); },[]);
@@ -705,10 +756,17 @@ function GPSModule({onSelectVehicle}){
         <TabBar tabs={gpsTabs} active={tab} onChange={(t)=>{setTab(t);cancelEdit();}}/>
         <div style={{marginLeft:"auto",marginBottom:20,display:"flex",gap:8}}>
           {tab==="editor"&&canEdit&&!editingId&&(
-            <button onClick={startNew} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuovo percorso</button>
+            <>
+              <input ref={csvInputRef} type="file" accept=".csv,.txt" onChange={handleCSVFile} style={{display:"none"}}/>
+              <button onClick={()=>csvInputRef.current.click()} style={{padding:"7px 16px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,color:T.textSub,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>↑ Importa CSV</button>
+              <button onClick={startNew} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuovo percorso</button>
+            </>
           )}
           {tab==="editor"&&editingId&&(
             <span style={{fontSize:11,color:T.textSub,display:"flex",alignItems:"center"}}>Click mappa → aggiungi · Click punto → rimuovi · Trascina → sposta</span>
+          )}
+          {tab==="editor"&&csvError&&(
+            <span style={{fontSize:11,color:T.red,display:"flex",alignItems:"center",maxWidth:340}}>{csvError}</span>
           )}
           {tab==="zone"&&!editingZone&&(
             <button onClick={()=>setEditingZone(true)} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuova zona</button>

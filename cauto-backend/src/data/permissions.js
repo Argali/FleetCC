@@ -1,12 +1,14 @@
-const ROLES   = ["fleet_manager","responsabile_officina","coordinatore_officina","coordinatore_operativo"];
+const ROLES   = ["superadmin","company_admin","fleet_manager","responsabile_officina","coordinatore_officina","coordinatore_operativo"];
 const MODULES = ["gps","workshop","fuel","suppliers","costs"];
 const LEVELS  = ["none","view","edit","full"];
 
 let matrix = {
-  fleet_manager:          { gps:"full",  workshop:"full",  fuel:"full",  suppliers:"full",  costs:"full",  admin:"full"  },
-  responsabile_officina:  { gps:"view",  workshop:"full",  fuel:"none",  suppliers:"view",  costs:"none",  admin:"none"  },
-  coordinatore_officina:  { gps:"view",  workshop:"edit",  fuel:"none",  suppliers:"none",  costs:"none",  admin:"none"  },
-  coordinatore_operativo: { gps:"full",  workshop:"view",  fuel:"full",  suppliers:"view",  costs:"view",  admin:"none"  },
+  superadmin:             { gps:"none", workshop:"none", fuel:"none", suppliers:"none", costs:"none", admin:"full"  },
+  company_admin:          { gps:"full", workshop:"full", fuel:"full", suppliers:"full", costs:"full", admin:"full"  },
+  fleet_manager:          { gps:"full", workshop:"full", fuel:"full", suppliers:"full", costs:"full", admin:"full"  },
+  responsabile_officina:  { gps:"view", workshop:"full", fuel:"none", suppliers:"view", costs:"none", admin:"none"  },
+  coordinatore_officina:  { gps:"view", workshop:"edit", fuel:"none", suppliers:"none", costs:"none", admin:"none"  },
+  coordinatore_operativo: { gps:"full", workshop:"view", fuel:"full", suppliers:"view", costs:"view", admin:"none"  },
 };
 
 module.exports = {

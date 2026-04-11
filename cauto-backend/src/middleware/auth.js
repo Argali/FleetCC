@@ -27,8 +27,24 @@ function requireRole(role) {
   };
 }
 
+function requireAnyRole(...roles) {
+  return (req, res, next) => {
+    if (!roles.includes(req.user?.role))
+      return res.status(403).json({ ok: false, error: "Accesso negato" });
+    next();
+  };
+}
+
+function requireSuperAdmin(req, res, next) {
+  if (req.user?.role !== "superadmin")
+    return res.status(403).json({ ok: false, error: "Riservato al super-amministratore" });
+  next();
+}
+
 function requirePerm(module, level = "view") {
   return (req, res, next) => {
+    // superadmin and company_admin bypass normal module permission checks
+    if (req.user?.role === "superadmin" || req.user?.role === "company_admin") return next();
     const userLevel = perms.getLevel(req.user?.role, module);
     if (!perms.hasAccess(userLevel, level))
       return res.status(403).json({ ok: false, error: "Permesso insufficiente" });
@@ -36,4 +52,4 @@ function requirePerm(module, level = "view") {
   };
 }
 
-module.exports = { requireAuth, requireRole, requirePerm };
+module.exports = { requireAuth, requireRole, requireAnyRole, requireSuperAdmin, requirePerm };

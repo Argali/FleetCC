@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, createContext, useContext, useRef } from "react";
+import { useState, useEffect, useCallback, createContext, useContext, useRef, useMemo } from "react";
 import { msalInstance, loginRequest } from "./msalConfig.js";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Stage, Layer, Rect as KonvaRect, Ellipse as KonvaEllipse, Line as KonvaLine, Text as KonvaText, Transformer as KonvaTransformer } from "react-konva";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
@@ -79,7 +80,7 @@ function useApi(path, { pollMs=0, skip=false }={}) {
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const statusLabel={active:"Attivo",idle:"Fermo",workshop:"Officina",waiting_parts:"Attesa Ricambi",in_progress:"In Corso",done:"Completato"};
 const statusColor={active:"#4ade80",idle:"#facc15",workshop:"#f87171",waiting_parts:"#fb923c",in_progress:"#60a5fa",done:"#6ee7b7"};
-const roleLabel={"fleet_manager":"Fleet Manager","responsabile_officina":"Resp. Officina","coordinatore_officina":"Coord. Officina","coordinatore_operativo":"Coord. Operativo"};
+const roleLabel={"superadmin":"Super Admin","company_admin":"Admin Azienda","fleet_manager":"Fleet Manager","responsabile_officina":"Resp. Officina","coordinatore_officina":"Coord. Officina","coordinatore_operativo":"Coord. Operativo"};
 const moduleLabel={gps:"GPS Live",workshop:"Officina",fuel:"Carburante",suppliers:"Fornitori",costs:"Costi",admin:"Admin"};
 const levelColor={none:"#3a5a7a",view:"#60a5fa",edit:"#facc15",full:"#4ade80"};
 
@@ -294,7 +295,7 @@ function VehicleDetail({vehicle,onBack}){
 }
 
 // ─── GPS MAP ──────────────────────────────────────────────────────────────────
-function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColor,zones,punti,onMapClick,onWaypointMove,onWaypointDelete,searchMarkerRef}){
+function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColor,zones,punti,onMapClick,onWaypointMove,onWaypointDelete,searchMarkerRef,snappedSegments,snapMode,onPathClick,annotations=[]}){
   const containerRef=useRef(null);
   const mapRef=useRef(null);
   const routeLayerRef=useRef(null);
@@ -302,12 +303,15 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
   const editLayerRef=useRef(null);
   const zoneLayerRef=useRef(null);
   const puntiLayerRef=useRef(null);
+  const annotLayerRef=useRef(null);
   const cbClick=useRef(onMapClick);
   const cbMove=useRef(onWaypointMove);
   const cbDel=useRef(onWaypointDelete);
+  const cbPathClick=useRef(onPathClick);
   useEffect(()=>{cbClick.current=onMapClick;},[onMapClick]);
   useEffect(()=>{cbMove.current=onWaypointMove;},[onWaypointMove]);
   useEffect(()=>{cbDel.current=onWaypointDelete;},[onWaypointDelete]);
+  useEffect(()=>{cbPathClick.current=onPathClick;},[onPathClick]);
 
   useEffect(()=>{
     if(!containerRef.current||mapRef.current)return;
@@ -316,6 +320,7 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
     routeLayerRef.current=L.layerGroup().addTo(map);
     zoneLayerRef.current=L.layerGroup().addTo(map);
     puntiLayerRef.current=L.layerGroup().addTo(map);
+    annotLayerRef.current=L.layerGroup().addTo(map);
     vehicleLayerRef.current=L.layerGroup().addTo(map);
     editLayerRef.current=L.layerGroup().addTo(map);
     map.on("click",(e)=>{ if(cbClick.current)cbClick.current([e.latlng.lat,e.latlng.lng]); });
@@ -369,6 +374,24 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
   },[punti]);
 
   useEffect(()=>{
+    if(!mapRef.current||!annotLayerRef.current)return;
+    annotLayerRef.current.clearLayers();
+    (annotations||[]).forEach(a=>{
+      if(!a.lat||!a.lng)return;
+      const m=L.marker([a.lat,a.lng],{
+        icon:L.divIcon({
+          className:"",
+          html:`<div style="background:${a.color||"#facc15"};color:#000;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.5);border:1.5px solid rgba(0,0,0,0.3);max-width:160px;overflow:hidden;text-overflow:ellipsis;">${a.text||"📌"}</div>`,
+          iconAnchor:[0,10],
+        }),
+        interactive:false,
+        zIndexOffset:2000,
+      });
+      annotLayerRef.current.addLayer(m);
+    });
+  },[annotations]);
+
+  useEffect(()=>{
     if(!mapRef.current||!vehicles||!vehicleLayerRef.current)return;
     vehicleLayerRef.current.clearLayers();
     if(editMode)return;
@@ -385,17 +408,42 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
     editLayerRef.current.clearLayers();
     if(!editMode||!editWaypoints||editWaypoints.length===0)return;
     const color=editColor||T.green;
-    L.polyline(editWaypoints,{color,weight:4,opacity:0.9}).addTo(editLayerRef.current);
+    // Draw path: snapped if available, else raw control points
+    const pathPts=snappedSegments?snappedSegments.flat():editWaypoints;
+    const line=L.polyline(pathPts,{color,weight:4,opacity:0.9,interactive:!!snappedSegments});
+    if(snappedSegments&&cbPathClick.current){
+      line.on("click",(e)=>{
+        L.DomEvent.stopPropagation(e);
+        const click=[e.latlng.lat,e.latlng.lng];
+        // Find closest control-point segment to determine insert position
+        let bestSeg=0,bestDist=Infinity;
+        for(let i=0;i<editWaypoints.length-1;i++){
+          const a=editWaypoints[i],b=editWaypoints[i+1];
+          const dx=b[0]-a[0],dy=b[1]-a[1];
+          const d2=dx*dx+dy*dy;
+          let t=d2>0?((click[0]-a[0])*dx+(click[1]-a[1])*dy)/d2:0;
+          t=Math.max(0,Math.min(1,t));
+          const dist=Math.hypot(click[0]-(a[0]+t*dx),click[1]-(a[1]+t*dy));
+          if(dist<bestDist){bestDist=dist;bestSeg=i;}
+        }
+        cbPathClick.current(bestSeg+1,click);
+      });
+    }
+    editLayerRef.current.addLayer(line);
     editWaypoints.forEach((wp,idx)=>{
       const m=L.marker([wp[0],wp[1]],{
         icon:L.divIcon({className:"",html:`<div style="width:18px;height:18px;background:${color};border:2px solid #000;border-radius:50%;cursor:grab;box-shadow:0 0 6px rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#000">${idx+1}</div>`,iconSize:[18,18],iconAnchor:[9,9]}),
         draggable:true,zIndexOffset:1000,
       });
       m.on("dragend",(e)=>{ const{lat,lng}=e.target.getLatLng(); if(cbMove.current)cbMove.current(idx,[lat,lng]); });
-      m.on("click",(e)=>{ L.DomEvent.stopPropagation(e); if(cbDel.current)cbDel.current(idx); });
+      if(snapMode){
+        m.on("contextmenu",(e)=>{ L.DomEvent.stopPropagation(e); if(cbDel.current)cbDel.current(idx); });
+      } else {
+        m.on("click",(e)=>{ L.DomEvent.stopPropagation(e); if(cbDel.current)cbDel.current(idx); });
+      }
       editLayerRef.current.addLayer(m);
     });
-  },[editMode,editWaypoints,editColor]);
+  },[editMode,editWaypoints,editColor,snappedSegments,snapMode]);
 
   return <div ref={containerRef} style={{height:"100%",width:"100%"}}/>;
 }
@@ -567,6 +615,64 @@ function GPSModule({onSelectVehicle}){
   const [editWaypoints,setEditWaypoints]=useState([]);
   const [meta,setMeta]=useState(EMPTY_META);
   const [saving,setSaving]=useState(false);
+  const [snappedSegments,setSnappedSegments]=useState(null); // null=free hand | array=snapped
+  const [snapLoading,setSnapLoading]=useState(false);
+  const [snapCosting,setSnapCosting]=useState("auto");
+  const [snapPopup,setSnapPopup]=useState(null);
+
+  const snapMode=snappedSegments!==null;
+  const snappedPath=snappedSegments?snappedSegments.flat():null;
+
+  // ── PDF export state ──────────────────────────────────────────────────────
+  const [pdfPanel,setPdfPanel]=useState(false);
+  const [pdfMode,setPdfMode]=useState("tutto");
+  const [pdfTitle,setPdfTitle]=useState("");
+  const [pdfExporting,setPdfExporting]=useState(false);
+  const mapContainerRef=useRef(null);
+
+  useEffect(()=>{
+    const labels={percorso:"Percorsi",zona:"Zone",punti:"Punti",tutto:"Vista Completa"};
+    setPdfTitle(labels[pdfMode]||"FleetCC");
+  },[pdfMode]);
+
+  const handleExportPdf=async()=>{
+    if(!mapContainerRef.current)return;
+    setPdfExporting(true);
+    try{
+      const [html2canvas,{jsPDF}]=await Promise.all([
+        import("html2canvas").then(m=>m.default),
+        import("jspdf"),
+      ]);
+      const canvas=await html2canvas(mapContainerRef.current,{useCORS:true,scale:2,logging:false});
+      const imgData=canvas.toDataURL("image/jpeg",0.92);
+      const pdf=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
+      const pw=pdf.internal.pageSize.getWidth();
+      const ph=pdf.internal.pageSize.getHeight();
+      pdf.setFillColor(10,22,40);
+      pdf.rect(0,0,pw,14,"F");
+      pdf.setTextColor(226,234,245);
+      pdf.setFontSize(10);
+      pdf.setFont("helvetica","bold");
+      pdf.text(pdfTitle||"FleetCC Export",8,9);
+      pdf.setFont("helvetica","normal");
+      pdf.setFontSize(8);
+      pdf.text(new Date().toLocaleDateString("it-IT",{day:"2-digit",month:"2-digit",year:"numeric"}),pw-8,9,{align:"right"});
+      const imgH=ph-16;
+      const imgW=pw;
+      pdf.addImage(imgData,"JPEG",0,14,imgW,imgH);
+      pdf.save(`${(pdfTitle||"fleetcc").replace(/\s+/g,"-").toLowerCase()}.pdf`);
+      setPdfPanel(false);
+    }catch(e){
+      alert("Errore export PDF: "+e.message);
+    }finally{
+      setPdfExporting(false);
+    }
+  };
+
+  // ── annotation state ──────────────────────────────────────────────────────
+  const [editAnnotations,setEditAnnotations]=useState([]);
+  const [annotMode,setAnnotMode]=useState(false);
+  const [annotEditId,setAnnotEditId]=useState(null);
 
   // ── zone editor state ─────────────────────────────────────────────────────
   const [zones,setZones]=useState(()=>{ try{return JSON.parse(localStorage.getItem("fleetcc_zones")||"[]");}catch{return[];} });
@@ -681,13 +787,72 @@ function GPSModule({onSelectVehicle}){
   useEffect(()=>{loadRoutes();},[loadRoutes]);
 
   const toggleRoute=(id)=>setVisibleRoutes(prev=>({...prev,[id]:!prev[id]}));
-  const startEdit=(r)=>{setEditingId(r.id);setEditWaypoints(r.waypoints.map(wp=>[...wp]));setMeta({name:r.name,color:r.color,opacity:r.opacity??0.85,comune:r.comune||"",materiale:r.materiale||"",sector:r.sector||""});};
-  const startNew=()=>{setEditingId("new");setEditWaypoints([]);setMeta({...EMPTY_META});};
-  const cancelEdit=()=>{setEditingId(null);setEditWaypoints([]);setMeta(EMPTY_META);};
+  const startEdit=(r)=>{setEditingId(r.id);setEditWaypoints(r.waypoints.map(wp=>[...wp]));setMeta({name:r.name,color:r.color,opacity:r.opacity??0.85,comune:r.comune||"",materiale:r.materiale||"",sector:r.sector||""});setSnappedSegments(null);setEditAnnotations(r.annotations||[]);setAnnotMode(false);setAnnotEditId(null);};
+  const startNew=()=>{setEditingId("new");setEditWaypoints([]);setMeta({...EMPTY_META});setSnappedSegments(null);setEditAnnotations([]);setAnnotMode(false);setAnnotEditId(null);};
+  const cancelEdit=()=>{setEditingId(null);setEditWaypoints([]);setMeta(EMPTY_META);setSnappedSegments(null);setEditAnnotations([]);setAnnotMode(false);setAnnotEditId(null);};
 
-  // ── CSV import ────────────────────────────────────────────────────────────
+  // ── Snap-to-roads ──────────────────────────────────────────────────────────
+  const reSnapSegments=useCallback(async(controlPts,segStart,segEnd)=>{
+    const n=controlPts.length;
+    if(n<2)return;
+    const s=Math.max(0,segStart),e=Math.min(n-2,segEnd);
+    if(s>e)return;
+    const sub=controlPts.slice(s,e+2);
+    try{
+      const res=await fetch(`${API}/gps/routes/snap-to-roads`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json",Authorization:`Bearer ${auth?.token}`},
+        body:JSON.stringify({waypoints:sub,costing:snapCosting}),
+      });
+      const json=await res.json();
+      if(json.ok){
+        setSnappedSegments(prev=>{
+          if(!prev)return prev;
+          const next=[...prev];
+          next.splice(s,e-s+1,...json.data.segments);
+          return next;
+        });
+      }
+    }catch{/* silent fail — control points already updated visually */}
+  },[auth?.token,snapCosting]);
+
+  const handleSnapToRoads=useCallback(async()=>{
+    if(editWaypoints.length<2)return;
+    setSnapLoading(true);
+    try{
+      const res=await fetch(`${API}/gps/routes/snap-to-roads`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json",Authorization:`Bearer ${auth?.token}`},
+        body:JSON.stringify({waypoints:editWaypoints,costing:snapCosting}),
+      });
+      const json=await res.json();
+      if(!json.ok){
+        setCsvError(json.error||"Errore snap-to-roads");
+        setTimeout(()=>setCsvError(null),8000);
+      } else {
+        setSnappedSegments(json.data.segments);
+        if(json.data.unmatched?.length)setSnapPopup(json.data.unmatched);
+      }
+    }catch{
+      setCsvError("Valhalla non disponibile. Avvia il server di routing.");
+      setTimeout(()=>setCsvError(null),8000);
+    }finally{
+      setSnapLoading(false);
+    }
+  },[editWaypoints,auth?.token,snapCosting]);
+
+  const handleInsertControlPoint=useCallback((insertIdx,latlng)=>{
+    const newPts=[...editWaypoints.slice(0,insertIdx),latlng,...editWaypoints.slice(insertIdx)];
+    setEditWaypoints(newPts);
+    reSnapSegments(newPts,insertIdx-1,insertIdx);
+  },[editWaypoints,reSnapSegments]);
+
+  // ── CSV / Excel import ────────────────────────────────────────────────────
   const csvInputRef=useRef(null);
+  const excelInputRef=useRef(null);
   const [csvError,setCsvError]=useState(null);
+  const [excelLoading,setExcelLoading]=useState(false);
+  const [excelPopup,setExcelPopup]=useState(null); // null | [{address,reason}]
 
   const parseCSVCoords=(text)=>{
     const sep=text.includes(";")?";":","
@@ -735,15 +900,69 @@ function GPSModule({onSelectVehicle}){
     };
     reader.readAsText(file);
   };
-  const handleMapClick=useCallback((latlng)=>{ if(editingId!==null)setEditWaypoints(prev=>[...prev,latlng]); },[editingId]);
-  const handleWaypointMove=useCallback((idx,latlng)=>{ setEditWaypoints(prev=>prev.map((wp,i)=>i===idx?latlng:wp)); },[]);
-  const handleWaypointDelete=useCallback((idx)=>{ setEditWaypoints(prev=>prev.filter((_,i)=>i!==idx)); },[]);
+  // ── Excel import ──────────────────────────────────────────────────────────
+  const handleExcelFile=async(e)=>{
+    const file=e.target.files[0]; if(!file)return;
+    e.target.value="";
+    setExcelLoading(true);
+    try{
+      const fd=new FormData();
+      fd.append("file",file);
+      const res=await fetch(`${API}/gps/routes/import-excel`,{
+        method:"POST",
+        headers:{Authorization:`Bearer ${auth?.token}`},
+        body:fd,
+      });
+      const json=await res.json();
+      if(!json.ok){
+        setCsvError(json.error||"Errore importazione Excel");
+        setTimeout(()=>setCsvError(null),8000);
+        if(json.unrecognized?.length)setExcelPopup(json.unrecognized);
+      } else {
+        const{waypoints,unrecognized}=json.data;
+        const name=file.name.replace(/\.[^.]+$/,"");
+        setEditingId("new");
+        setEditWaypoints(waypoints);
+        setMeta({...EMPTY_META,name});
+        if(unrecognized?.length)setExcelPopup(unrecognized);
+      }
+    }catch{
+      setCsvError("Errore di rete durante l'importazione Excel");
+      setTimeout(()=>setCsvError(null),6000);
+    }finally{
+      setExcelLoading(false);
+    }
+  };
+
+  const handleMapClick=useCallback((latlng)=>{
+    if(editingId!==null&&annotMode){
+      const id=Date.now();
+      setEditAnnotations(prev=>[...prev,{id,lat:latlng[0],lng:latlng[1],text:"",color:"#facc15"}]);
+      setAnnotEditId(id);
+      setAnnotMode(false);
+      return;
+    }
+    if(editingId!==null&&!snapMode)setEditWaypoints(prev=>[...prev,latlng]);
+  },[editingId,annotMode,snapMode]);
+  const handleWaypointMove=useCallback((idx,latlng)=>{
+    const newPts=editWaypoints.map((wp,i)=>i===idx?latlng:wp);
+    setEditWaypoints(newPts);
+    if(snappedSegments!==null)reSnapSegments(newPts,Math.max(0,idx-1),Math.min(newPts.length-2,idx));
+  },[editWaypoints,snappedSegments,reSnapSegments]);
+  const handleWaypointDelete=useCallback((idx)=>{
+    const newPts=editWaypoints.filter((_,i)=>i!==idx);
+    setEditWaypoints(newPts);
+    if(snappedSegments!==null){
+      if(newPts.length<2)setSnappedSegments(null);
+      else reSnapSegments(newPts,Math.max(0,idx-1),Math.min(newPts.length-2,idx-1));
+    }
+  },[editWaypoints,snappedSegments,reSnapSegments]);
 
   const saveRoute=async()=>{
     if(!meta.name.trim()||editWaypoints.length<2)return;
     setSaving(true);
     try{
-      const body={...meta,waypoints:editWaypoints,opacity:Number(meta.opacity)};
+      const body={...meta,waypoints:snappedPath||editWaypoints,opacity:Number(meta.opacity),annotations:editAnnotations};
       const url=editingId==="new"?`${API}/gps/routes`:`${API}/gps/routes/${editingId}`;
       const method=editingId==="new"?"POST":"PUT";
       const d=await(await fetch(url,{method,headers:{Authorization:`Bearer ${auth.token}`,"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
@@ -760,6 +979,18 @@ function GPSModule({onSelectVehicle}){
   const canEdit=can("gps","edit");
   const editorActive=tab==="editor"&&editingId!==null;
   const inp={width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"8px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"};
+
+  const visibleAnnotations=useMemo(()=>{
+    const out=[];
+    if(editingId!==null){
+      editAnnotations.forEach(a=>out.push(a));
+    } else {
+      (routes||[]).forEach(r=>{ if(visibleRoutes[r.id]!==false)(r.annotations||[]).forEach(a=>out.push(a)); });
+      zones.forEach(z=>{ if(visibleZones[z.id]!==false)(z.annotations||[]).forEach(a=>out.push(a)); });
+      punti.forEach(p=>{ if(visiblePunti[p.id]!==false&&p.annotation)out.push({id:p.id,lat:p.lat,lng:p.lng,text:p.annotation,color:p.color}); });
+    }
+    return out;
+  },[routes,zones,punti,visibleRoutes,visibleZones,visiblePunti,editAnnotations,editingId]);
 
   if(loading)return<Spinner/>;if(error)return<ApiError error={error} onRetry={refetch}/>;
 
@@ -779,12 +1010,41 @@ function GPSModule({onSelectVehicle}){
           {tab==="editor"&&canEdit&&!editingId&&(
             <>
               <input ref={csvInputRef} type="file" accept=".csv,.txt" onChange={handleCSVFile} style={{display:"none"}}/>
+              <input ref={excelInputRef} type="file" accept=".xlsx,.xls,.ods" onChange={handleExcelFile} style={{display:"none"}}/>
               <button onClick={()=>csvInputRef.current.click()} style={{padding:"7px 16px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,color:T.textSub,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>↑ Importa CSV</button>
+              <button onClick={()=>excelInputRef.current.click()} disabled={excelLoading} style={{padding:"7px 16px",background:excelLoading?T.bg:T.bg,border:`1px solid ${excelLoading?T.border:T.green+"55"}`,borderRadius:8,color:excelLoading?T.textDim:T.green,cursor:excelLoading?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+                {excelLoading&&<span style={{display:"inline-block",width:11,height:11,border:`2px solid ${T.green}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>}
+                {excelLoading?"Geocodifica…":"↑ Importa Excel"}
+              </button>
               <button onClick={startNew} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuovo percorso</button>
             </>
           )}
           {tab==="editor"&&editingId&&(
-            <span style={{fontSize:11,color:T.textSub,display:"flex",alignItems:"center"}}>Click mappa → aggiungi · Click punto → rimuovi · Trascina → sposta</span>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {!snapMode&&editWaypoints.length>=2&&(
+                <>
+                  <div style={{display:"flex",borderRadius:7,overflow:"hidden",border:`1px solid ${T.border}`}}>
+                    {[["auto","🚗 Pat. B"],["truck","🚛 Pat. C"]].map(([v,l])=>(
+                      <button key={v} onClick={()=>setSnapCosting(v)} style={{padding:"5px 12px",background:snapCosting===v?T.navActive:T.bg,color:snapCosting===v?T.blue:T.textSub,border:"none",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600}}>{l}</button>
+                    ))}
+                  </div>
+                  <button onClick={handleSnapToRoads} disabled={snapLoading} style={{padding:"7px 14px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:snapLoading?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+                    {snapLoading&&<span style={{display:"inline-block",width:11,height:11,border:`2px solid ${T.blue}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>}
+                    {snapLoading?"Calcolo…":"🛣 Segui le strade"}
+                  </button>
+                </>
+              )}
+              {snapMode&&(
+                <>
+                  <span style={{fontSize:11,color:T.teal,fontWeight:600}}>✓ Su strada</span>
+                  <span style={{fontSize:11,color:T.textSub}}>Click linea → aggiungi · Tasto dx punto → rimuovi · Trascina → sposta</span>
+                  <button onClick={()=>setSnappedSegments(null)} style={{padding:"4px 10px",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.textSub,cursor:"pointer",fontSize:11,fontFamily:T.font}}>↩ Mano libera</button>
+                </>
+              )}
+              {!snapMode&&editWaypoints.length<2&&(
+                <span style={{fontSize:11,color:T.textSub}}>Click mappa → aggiungi · Click punto → rimuovi · Trascina → sposta</span>
+              )}
+            </div>
           )}
           {tab==="editor"&&csvError&&(
             <span style={{fontSize:11,color:T.red,display:"flex",alignItems:"center",maxWidth:340}}>{csvError}</span>
@@ -890,13 +1150,15 @@ function GPSModule({onSelectVehicle}){
           </div>
         )}
 
-        <div style={{flex:1,borderRadius:12,border:`1px solid ${T.border}`,position:"relative",overflow:"hidden"}}>
+        <div ref={mapContainerRef} style={{flex:1,borderRadius:12,border:`1px solid ${T.border}`,position:"relative",overflow:"hidden"}}>
           {(tab==="live"||tab==="editor")&&<FleetMap
             vehicles={vehicles} routes={routes||[]} visibleRoutes={visibleRoutes}
             zones={tab==="live"?zones.filter(z=>visibleZones[z.id]!==false):[]} punti={tab==="live"?punti.filter(p=>visiblePunti[p.id]!==false):[]}
             editMode={editorActive} editWaypoints={editWaypoints} editColor={meta.color}
-            onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onWaypointDelete={handleWaypointDelete}
+            snappedSegments={snappedSegments} snapMode={snapMode}
+            onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onWaypointDelete={handleWaypointDelete} onPathClick={handleInsertControlPoint}
             searchMarkerRef={tab==="live"?liveMapRef:null}
+            annotations={visibleAnnotations}
           />}
           {tab==="zone"&&<ZoneMap zones={zones} drawMode={drawingZone} zoneConfig={zoneCfg} onShapeComplete={handleShapeComplete} onZoneDelete={deleteZone}/>}
           {tab==="punti"&&<PuntiMap punti={punti} drawMode={drawingPunti} onMapClick={handlePuntiMapClick} onPuntoDelete={deletePunto}/>}
@@ -1005,6 +1267,37 @@ function GPSModule({onSelectVehicle}){
             </div>
           )}
           {tab==="live"&&<div style={{position:"absolute",bottom:10,left:10,zIndex:1000,fontSize:10,color:T.textSub,fontFamily:T.mono,background:"rgba(13,27,42,0.85)",padding:"4px 10px",borderRadius:6}}>Aggiornamento ogni 10s · Visirun mock</div>}
+          {/* ── PDF Export button ── */}
+          {(tab==="live"||tab==="editor"||tab==="zone"||tab==="punti")&&(
+            <button onClick={()=>setPdfPanel(p=>!p)}
+              style={{position:"absolute",bottom:10,right:10,zIndex:1001,background:"rgba(13,27,42,0.9)",border:`1px solid ${T.border}`,borderRadius:8,color:T.textSub,padding:"6px 12px",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,backdropFilter:"blur(6px)"}}>
+              📄 PDF
+            </button>
+          )}
+          {pdfPanel&&(
+            <div style={{position:"absolute",bottom:46,right:10,zIndex:1002,background:"rgba(13,27,42,0.96)",border:`1px solid ${T.border}`,borderRadius:10,padding:16,width:230,backdropFilter:"blur(8px)",boxShadow:"0 4px 20px rgba(0,0,0,0.5)",fontFamily:T.font}} onClick={e=>e.stopPropagation()}>
+              <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:12}}>Esporta mappa in PDF</div>
+              <div style={{marginBottom:10}}>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:6,fontWeight:600}}>Modalità</div>
+                {[["tutto","Tutto"],["percorso","Percorsi"],["zona","Zone"],["punti","Punti"]].map(([v,l])=>(
+                  <label key={v} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,cursor:"pointer"}}>
+                    <input type="radio" name="pdfMode" value={v} checked={pdfMode===v} onChange={()=>setPdfMode(v)} style={{accentColor:T.blue}}/>
+                    <span style={{fontSize:12,color:T.text}}>{l}</span>
+                  </label>
+                ))}
+              </div>
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:5,fontWeight:600}}>Titolo</div>
+                <input value={pdfTitle} onChange={e=>setPdfTitle(e.target.value)}
+                  style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"7px 9px",fontSize:12,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
+              </div>
+              <button onClick={handleExportPdf} disabled={pdfExporting}
+                style={{width:"100%",padding:"9px",background:pdfExporting?T.bg:T.navActive,border:`1px solid ${pdfExporting?T.border:T.blue+"66"}`,borderRadius:7,color:pdfExporting?T.textDim:T.blue,cursor:pdfExporting?"not-allowed":"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                {pdfExporting&&<span style={{display:"inline-block",width:11,height:11,border:`2px solid ${T.blue}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>}
+                {pdfExporting?"Generazione…":"Esporta PDF"}
+              </button>
+            </div>
+          )}
           {/* ── CDR: placeholder (list mode) ── */}
           {tab==="cdr"&&!editingCdr&&(
             <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,background:"#0e1822"}}>
@@ -1618,10 +1911,89 @@ function GPSModule({onSelectVehicle}){
                 </button>
                 <button onClick={cancelEdit} style={{flex:1,background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:T.textSub,padding:"9px",cursor:"pointer",fontSize:13,fontFamily:T.font}}>Annulla</button>
               </div>
+              {/* Annotations section */}
+              <div style={{marginTop:14,borderTop:`1px solid ${T.border}`,paddingTop:14}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                  <div style={{fontSize:12,fontWeight:700,color:T.text}}>📌 Annotazioni ({editAnnotations.length})</div>
+                  <button onClick={()=>{setAnnotMode(m=>!m);setAnnotEditId(null);}}
+                    style={{padding:"4px 10px",background:annotMode?"#0d2010":T.bg,border:`1px solid ${annotMode?T.green+"66":T.border}`,borderRadius:6,color:annotMode?T.green:T.textSub,cursor:"pointer",fontSize:11,fontFamily:T.font,fontWeight:600}}>
+                    {annotMode?"✓ Clicca mappa":"+ Annota"}
+                  </button>
+                </div>
+                {editAnnotations.length===0&&<div style={{fontSize:11,color:T.textDim,textAlign:"center",padding:"8px 0"}}>Nessuna annotazione</div>}
+                {editAnnotations.map(a=>(
+                  <div key={a.id} style={{background:T.bg,border:`1px solid ${annotEditId===a.id?a.color:T.border}`,borderRadius:7,padding:"8px 10px",marginBottom:6}}>
+                    {annotEditId===a.id?(
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        <input autoFocus value={a.text} onChange={e=>setEditAnnotations(prev=>prev.map(x=>x.id===a.id?{...x,text:e.target.value}:x))}
+                          placeholder="Testo annotazione…"
+                          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:5,color:T.text,padding:"5px 8px",fontSize:12,fontFamily:T.font,outline:"none"}}/>
+                        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                          {["#facc15","#4ade80","#60a5fa","#f87171","#fb923c","#c084fc","#ffffff"].map(c=>(
+                            <div key={c} onClick={()=>setEditAnnotations(prev=>prev.map(x=>x.id===a.id?{...x,color:c}:x))}
+                              style={{width:18,height:18,borderRadius:"50%",background:c,cursor:"pointer",border:a.color===c?"2.5px solid #fff":"2px solid transparent",flexShrink:0}}/>
+                          ))}
+                        </div>
+                        <div style={{display:"flex",gap:5}}>
+                          <button onClick={()=>setAnnotEditId(null)} style={{flex:1,padding:"4px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:5,color:T.blue,cursor:"pointer",fontSize:11,fontWeight:600}}>✓ OK</button>
+                          <button onClick={()=>setEditAnnotations(prev=>prev.filter(x=>x.id!==a.id))} style={{padding:"4px 8px",background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:5,color:T.red,cursor:"pointer",fontSize:11}}>Elimina</button>
+                        </div>
+                      </div>
+                    ):(
+                      <div style={{display:"flex",alignItems:"center",gap:7,cursor:"pointer"}} onClick={()=>setAnnotEditId(a.id)}>
+                        <div style={{width:10,height:10,borderRadius:"50%",background:a.color,flexShrink:0,border:"1.5px solid rgba(255,255,255,0.4)"}}/>
+                        <span style={{fontSize:12,color:T.text,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.text||"(senza testo)"}</span>
+                        <span style={{fontSize:10,color:T.textDim,flexShrink:0}}>✏</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* ── Excel unrecognized popup ── */}
+      {excelPopup&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setExcelPopup(null)}>
+          <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:12,padding:24,minWidth:380,maxWidth:520,maxHeight:"70vh",display:"flex",flexDirection:"column",gap:12,fontFamily:T.font}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{fontSize:14,fontWeight:700,color:T.yellow}}>⚠ Indirizzi non geocodificati</div>
+              <button onClick={()=>setExcelPopup(null)} style={{background:"none",border:"none",color:T.textSub,cursor:"pointer",fontSize:18,lineHeight:1}}>×</button>
+            </div>
+            <div style={{fontSize:12,color:T.textSub}}>I seguenti indirizzi non sono stati trovati su Nominatim e sono stati saltati:</div>
+            <div style={{overflowY:"auto",display:"flex",flexDirection:"column",gap:6}}>
+              {excelPopup.map((u,i)=>(
+                <div key={i} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:7,padding:"8px 12px"}}>
+                  <div style={{fontSize:13,color:T.text,fontWeight:600}}>{u.address}</div>
+                  <div style={{fontSize:11,color:T.red,marginTop:2}}>{u.reason}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={()=>setExcelPopup(null)} style={{marginTop:4,padding:"8px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontWeight:600}}>Chiudi</button>
+          </div>
+        </div>
+      )}
+      {snapPopup&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setSnapPopup(null)}>
+          <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:12,padding:24,minWidth:360,maxWidth:480,fontFamily:T.font}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+              <div style={{fontSize:14,fontWeight:700,color:T.orange}}>⚠ Segmenti non agganciati alla strada</div>
+              <button onClick={()=>setSnapPopup(null)} style={{background:"none",border:"none",color:T.textSub,cursor:"pointer",fontSize:18}}>×</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:"50vh",overflowY:"auto"}}>
+              {snapPopup.map((u,i)=>(
+                <div key={i} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:7,padding:"8px 12px"}}>
+                  <div style={{fontSize:13,color:T.text}}>{typeof u==="string"?u:u.address}</div>
+                  {u.reason&&<div style={{fontSize:11,color:T.orange,marginTop:2}}>{u.reason}</div>}
+                </div>
+              ))}
+            </div>
+            <button onClick={()=>setSnapPopup(null)} style={{marginTop:12,width:"100%",padding:"8px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontWeight:600}}>Chiudi</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2430,6 +2802,399 @@ function AdminPanel(){
   );
 }
 
+// ─── SUPER-ADMIN DASHBOARD (task 15) ──────────────────────────────────────────
+const MODULE_META = {
+  gps:        { label:"GPS Live",     icon:"M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z" },
+  cdr:        { label:"Schede CDR",   icon:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" },
+  zone:       { label:"Zone",         icon:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" },
+  punti:      { label:"Punti",        icon:"M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" },
+  percorsi:   { label:"Percorsi",     icon:"M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z M9 4v13 M15 7v13" },
+  pdf_export: { label:"Export PDF",   icon:"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3" },
+};
+
+function SuperAdminDashboard(){
+  const {auth}=useAuth();
+  const [tenants,setTenants]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [saving,setSaving]=useState({});
+  const [msg,setMsg]=useState(null);
+
+  const load=useCallback(async()=>{
+    setLoading(true);
+    try{
+      const r=await fetch(`${API}/superadmin/tenants`,{headers:{Authorization:`Bearer ${auth.token}`}});
+      const d=await r.json();
+      if(d.ok)setTenants(d.data);
+    }catch{}
+    setLoading(false);
+  },[auth.token]);
+
+  useEffect(()=>{ load(); },[load]);
+
+  const toggleModule=async(tenantId,mod,current)=>{
+    const key=`${tenantId}-${mod}`;
+    setSaving(s=>({...s,[key]:true}));
+    try{
+      const r=await fetch(`${API}/superadmin/tenants/${tenantId}/modules`,{
+        method:"PATCH",
+        headers:{Authorization:`Bearer ${auth.token}`,"Content-Type":"application/json"},
+        body:JSON.stringify({modules:{[mod]:!current}}),
+      });
+      const d=await r.json();
+      if(d.ok){
+        setTenants(ts=>ts.map(t=>t.id===tenantId?{...t,modules:{...t.modules,[mod]:!current}}:t));
+        setMsg({ok:true,text:`${mod} ${!current?"abilitato":"disabilitato"} per ${tenantId}`});
+      } else setMsg({ok:false,text:d.error});
+    }catch{ setMsg({ok:false,text:"Errore di rete"}); }
+    setSaving(s=>({...s,[key]:false}));
+    setTimeout(()=>setMsg(null),3000);
+  };
+
+  const toggleTenantActive=async(tenantId,current)=>{
+    try{
+      const r=await fetch(`${API}/superadmin/tenants/${tenantId}/active`,{
+        method:"PATCH",
+        headers:{Authorization:`Bearer ${auth.token}`,"Content-Type":"application/json"},
+        body:JSON.stringify({active:!current}),
+      });
+      const d=await r.json();
+      if(d.ok) setTenants(ts=>ts.map(t=>t.id===tenantId?{...t,active:!current}:t));
+      else setMsg({ok:false,text:d.error});
+    }catch{ setMsg({ok:false,text:"Errore di rete"}); }
+  };
+
+  const now=Date.now();
+  const sevenDays=7*24*60*60*1000;
+
+  if(loading) return <Spinner/>;
+
+  return(
+    <div style={{fontFamily:T.font,display:"flex",flexDirection:"column",gap:20}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontSize:18,fontWeight:700,color:T.text}}>Gestione Tenant</div>
+          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>{tenants.length} aziende registrate · accesso solo a questa sezione</div>
+        </div>
+        {msg&&<div style={{fontSize:12,padding:"8px 14px",borderRadius:8,background:msg.ok?"#0a1a0a":"#1a0808",border:`1px solid ${msg.ok?T.green:T.red}`,color:msg.ok?T.green:T.red}}>{msg.text}</div>}
+      </div>
+
+      {tenants.map(t=>{
+        const inactive=now-new Date(t.last_active).getTime()>sevenDays;
+        const daysAgo=Math.floor((now-new Date(t.last_active).getTime())/(24*60*60*1000));
+        const enabledCount=Object.values(t.modules).filter(Boolean).length;
+        return(
+          <div key={t.id} style={{background:T.card,border:`1px solid ${t.active?T.cardBorder:"#3a1a1a"}`,borderRadius:12,padding:"18px 20px",opacity:t.active?1:0.6}}>
+            <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:14}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{fontSize:14,fontWeight:700,color:T.text}}>{t.name}</div>
+                  <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:T.navActive,color:T.textSub,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>{t.plan}</span>
+                  {inactive&&t.active&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:"#1a0a0a",color:T.orange,border:`1px solid ${T.orange}44`,fontWeight:600}}>⚠ Inattivo {daysAgo}gg</span>}
+                </div>
+                <div style={{fontSize:11,color:T.textDim,marginTop:3}}>{t.id} · {enabledCount} moduli attivi · ultimo accesso {daysAgo===0?"oggi":`${daysAgo}gg fa`}</div>
+              </div>
+              <button onClick={()=>toggleTenantActive(t.id,t.active)}
+                style={{fontSize:11,padding:"5px 12px",background:"transparent",border:`1px solid ${t.active?T.red:T.green}44`,borderRadius:6,color:t.active?T.red:T.green,cursor:"pointer",fontFamily:T.font,fontWeight:600}}>
+                {t.active?"Sospendi":"Riattiva"}
+              </button>
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+              {Object.entries(MODULE_META).map(([mod,meta])=>{
+                const enabled=t.modules[mod]??false;
+                const key=`${t.id}-${mod}`;
+                const isSaving=saving[key];
+                return(
+                  <button key={mod} onClick={()=>!isSaving&&t.active&&toggleModule(t.id,mod,enabled)}
+                    disabled={isSaving||!t.active}
+                    style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,cursor:t.active?"pointer":"not-allowed",fontFamily:T.font,fontSize:11,fontWeight:600,transition:"all 0.15s",
+                      background:enabled?"#0a1a0a":"transparent",
+                      border:`1px solid ${enabled?T.green:T.border}`,
+                      color:enabled?T.green:T.textDim,
+                      opacity:isSaving?0.5:1,
+                    }}>
+                    <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d={meta.icon}/>
+                    </svg>
+                    {meta.label}
+                    {isSaving&&<span style={{width:8,height:8,border:`1px solid currentColor`,borderTopColor:"transparent",borderRadius:"50%",display:"inline-block",animation:"spin 0.6s linear infinite"}}/>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── COMPANY ADMIN PANEL (task 16) ────────────────────────────────────────────
+function CompanyAdminPanel(){
+  const {auth}=useAuth();
+  const {roles}=usePerms();
+  const [users,setUsers]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const [showNew,setShowNew]=useState(false);
+  const [newUser,setNewUser]=useState({name:"",email:"",password:"",role:"coordinatore_operativo"});
+  const [msg,setMsg]=useState(null);
+  const [tenantModules,setTenantModules]=useState(null);
+
+  // Roles that company_admin is allowed to assign
+  const assignableRoles=roles.filter(r=>!["superadmin","company_admin"].includes(r));
+
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const r=await fetch(`${API}/admin/users`,{headers:{Authorization:`Bearer ${auth.token}`}});
+    const d=await r.json();if(d.ok)setUsers(d.data);
+    setLoading(false);
+  },[auth.token]);
+
+  useEffect(()=>{ load(); },[load]);
+
+  // Load tenant modules from superadmin endpoint (read-only view for company_admin)
+  useEffect(()=>{
+    const stored=localStorage.getItem("tenant_modules");
+    if(stored){ try{ setTenantModules(JSON.parse(stored)); }catch{} }
+  },[]);
+
+  const inp={width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",color:T.text,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:T.font};
+
+  const createUser=async()=>{
+    if(!newUser.name||!newUser.email||!newUser.password){setMsg({ok:false,text:"Tutti i campi sono obbligatori"});return;}
+    const r=await fetch(`${API}/admin/users`,{method:"POST",headers:{Authorization:`Bearer ${auth.token}`,"Content-Type":"application/json"},body:JSON.stringify(newUser)});
+    const d=await r.json();
+    if(d.ok){setMsg({ok:true,text:"Utente creato"});setShowNew(false);setNewUser({name:"",email:"",password:"",role:"coordinatore_operativo"});load();}
+    else setMsg({ok:false,text:d.error});
+    setTimeout(()=>setMsg(null),3000);
+  };
+  const toggleUser=async(id,active)=>{
+    await fetch(`${API}/admin/users/${id}`,{method:"PATCH",headers:{Authorization:`Bearer ${auth.token}`,"Content-Type":"application/json"},body:JSON.stringify({active})});
+    load();
+  };
+  const changeRole=async(id,role)=>{
+    await fetch(`${API}/admin/users/${id}`,{method:"PATCH",headers:{Authorization:`Bearer ${auth.token}`,"Content-Type":"application/json"},body:JSON.stringify({role})});
+    load();
+  };
+
+  return(
+    <div style={{fontFamily:T.font,display:"flex",flexDirection:"column",gap:20}}>
+      <div>
+        <div style={{fontSize:18,fontWeight:700,color:T.text}}>Amministrazione Azienda</div>
+        <div style={{fontSize:12,color:T.textSub,marginTop:2}}>Gestisci gli utenti della tua organizzazione</div>
+      </div>
+
+      {/* Module status (read-only, driven by superadmin settings) */}
+      {tenantModules&&(
+        <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"14px 18px"}}>
+          <div style={{fontSize:11,color:T.textSub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10,fontWeight:600}}>Moduli abilitati dalla piattaforma</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+            {Object.entries(MODULE_META).map(([mod,meta])=>{
+              const enabled=tenantModules[mod]??false;
+              return(
+                <div key={mod} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 11px",borderRadius:8,fontSize:11,fontWeight:600,
+                  background:enabled?"#0a1a0a":"transparent",border:`1px solid ${enabled?T.green:T.border}`,color:enabled?T.green:T.textDim}}>
+                  {meta.label}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{fontSize:10,color:T.textDim,marginTop:8}}>Contatta il supporto per modificare i moduli abilitati</div>
+        </div>
+      )}
+
+      {/* Users section */}
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontSize:13,color:T.textSub}}>{users.length} utenti nella tua organizzazione</div>
+          <button onClick={()=>setShowNew(v=>!v)}
+            style={{padding:"9px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+            {showNew?"✕ Annulla":"+ Nuovo utente"}
+          </button>
+        </div>
+
+        {msg&&<div style={{fontSize:13,padding:"10px 14px",borderRadius:8,background:msg.ok?T.card:"#1a0808",border:`1px solid ${msg.ok?T.border:"#4a1a1a"}`,color:msg.ok?T.green:T.red}}>{msg.text}</div>}
+
+        {showNew&&(
+          <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:18,display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{fontSize:14,color:T.text,fontWeight:600}}>Nuovo utente</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              {[["Nome","text",newUser.name,v=>setNewUser(u=>({...u,name:v}))],
+                ["Email","email",newUser.email,v=>setNewUser(u=>({...u,email:v}))],
+                ["Password","password",newUser.password,v=>setNewUser(u=>({...u,password:v}))]].map(([label,type,val,set])=>(
+                <div key={label}>
+                  <label style={{fontSize:11,color:T.textSub,display:"block",marginBottom:5,fontWeight:600}}>{label}</label>
+                  <input type={type} value={val} onChange={e=>set(e.target.value)} style={inp}/>
+                </div>
+              ))}
+              <div>
+                <label style={{fontSize:11,color:T.textSub,display:"block",marginBottom:5,fontWeight:600}}>Ruolo</label>
+                <select value={newUser.role} onChange={e=>setNewUser(u=>({...u,role:e.target.value}))} style={inp}>
+                  {assignableRoles.map(r=><option key={r} value={r}>{roleLabel[r]||r}</option>)}
+                </select>
+              </div>
+            </div>
+            <button onClick={createUser}
+              style={{alignSelf:"flex-start",padding:"9px 18px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+              Crea utente
+            </button>
+          </div>
+        )}
+
+        {loading?<Spinner/>:(
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {users.map(u=>(
+              <div key={u.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:12,opacity:u.active?1:0.5}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:600,color:T.text}}>{u.name}</div>
+                  <div style={{fontSize:11,color:T.textSub,marginTop:2}}>{u.email}</div>
+                </div>
+                <select value={u.role} onChange={e=>changeRole(u.id,e.target.value)}
+                  style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,padding:"5px 8px",color:T.text,fontSize:11,outline:"none",fontFamily:T.font,cursor:"pointer"}}>
+                  {assignableRoles.map(r=><option key={r} value={r}>{roleLabel[r]||r}</option>)}
+                </select>
+                <div style={{width:8,height:8,borderRadius:"50%",background:u.active?T.green:T.textDim,flexShrink:0}}/>
+                <button onClick={()=>toggleUser(u.id,!u.active)}
+                  style={{fontSize:12,padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:u.active?T.red:T.green,cursor:"pointer",fontFamily:T.font}}>
+                  {u.active?"Disattiva":"Riattiva"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── SUPER-ADMIN ANALYTICS (task 17) ──────────────────────────────────────────
+const MODULE_LABELS_SHORT={gps:"GPS",cdr:"CDR",zone:"Zone",punti:"Punti",percorsi:"Percorsi",pdf_export:"PDF"};
+const CHART_COLORS=["#60a5fa","#4ade80","#fb923c","#f472b6","#34d399","#facc15"];
+
+function SuperAdminAnalytics(){
+  const {auth}=useAuth();
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    (async()=>{
+      setLoading(true);
+      try{
+        const r=await fetch(`${API}/superadmin/analytics`,{headers:{Authorization:`Bearer ${auth.token}`}});
+        const d=await r.json();
+        if(d.ok)setData(d.data);
+      }catch{}
+      setLoading(false);
+    })();
+  },[auth.token]);
+
+  if(loading) return <Spinner/>;
+  if(!data) return <div style={{color:T.textSub,fontSize:13}}>Impossibile caricare i dati</div>;
+
+  const {summary,module_adoption,tenant_stats,inactive_alerts}=data;
+  const chartData=module_adoption.map((m,i)=>({name:MODULE_LABELS_SHORT[m.module]||m.module,count:m.count,pct:m.pct,fill:CHART_COLORS[i%CHART_COLORS.length]}));
+
+  const statCards=[
+    {label:"Aziende attive",value:summary.active_tenants,color:T.blue},
+    {label:"Utenti attivi",value:summary.total_users,color:T.green},
+    {label:"Aziende inattive >7gg",value:summary.inactive_tenants,color:summary.inactive_tenants>0?T.orange:T.textSub},
+    {label:"Aziende totali",value:summary.total_tenants,color:T.textSub},
+  ];
+
+  return(
+    <div style={{fontFamily:T.font,display:"flex",flexDirection:"column",gap:22}}>
+      <div>
+        <div style={{fontSize:18,fontWeight:700,color:T.text}}>Analytics Piattaforma</div>
+        <div style={{fontSize:12,color:T.textSub,marginTop:2}}>Panoramica sull'adozione e attività dei tenant</div>
+      </div>
+
+      {/* KPI cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12}}>
+        {statCards.map(s=>(
+          <div key={s.label} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"16px 18px"}}>
+            <div style={{fontSize:28,fontWeight:800,color:s.color,fontVariantNumeric:"tabular-nums"}}>{s.value}</div>
+            <div style={{fontSize:11,color:T.textSub,marginTop:4,fontWeight:600}}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Module adoption chart */}
+      <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"18px 20px"}}>
+        <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:16}}>Adozione moduli</div>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={chartData} barSize={32}>
+            <XAxis dataKey="name" tick={{fill:T.textSub,fontSize:11}} axisLine={false} tickLine={false}/>
+            <YAxis tick={{fill:T.textSub,fontSize:11}} axisLine={false} tickLine={false} allowDecimals={false}/>
+            <Tooltip
+              contentStyle={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,color:T.text}}
+              formatter={(v,_n,p)=>[`${v} / ${summary.active_tenants} aziende (${p.payload.pct}%)`,"Tenant"]}
+            />
+            <Bar dataKey="count" radius={[4,4,0,0]}>
+              {chartData.map((entry,i)=><Cell key={i} fill={entry.fill}/>)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Inactivity alerts */}
+      {inactive_alerts.length>0&&(
+        <div style={{background:T.card,border:`1px solid ${T.orange}44`,borderRadius:10,padding:"18px 20px"}}>
+          <div style={{fontSize:13,fontWeight:700,color:T.orange,marginBottom:12}}>⚠ Allerta inattività ({inactive_alerts.length})</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {inactive_alerts.map(a=>(
+              <div key={a.id} style={{display:"flex",alignItems:"center",gap:14,padding:"10px 14px",background:"#1a0f00",border:"1px solid #2a1a00",borderRadius:8}}>
+                <div style={{width:8,height:8,borderRadius:"50%",background:T.orange,flexShrink:0}}/>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:600,color:T.text}}>{a.name}</div>
+                  <div style={{fontSize:11,color:T.textDim}}>Ultimo accesso: {new Date(a.last_active).toLocaleDateString("it-IT")}</div>
+                </div>
+                <div style={{fontSize:12,color:T.orange,fontFamily:T.mono,fontWeight:700}}>{a.days_inactive} gg</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Per-tenant stats table */}
+      <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"18px 20px"}}>
+        <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:14}}>Dettaglio tenant</div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead>
+              <tr>
+                {["Azienda","Piano","Utenti","Moduli","Ultimo accesso","Stato"].map(h=>(
+                  <th key={h} style={{padding:"8px 14px",textAlign:"left",color:T.textSub,fontWeight:600,fontSize:10,textTransform:"uppercase",letterSpacing:0.5,borderBottom:`1px solid ${T.border}`}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tenant_stats.map(t=>(
+                <tr key={t.id} style={{borderBottom:`1px solid ${T.border}22`}}>
+                  <td style={{padding:"12px 14px",color:T.text,fontWeight:600}}>{t.name}</td>
+                  <td style={{padding:"12px 14px",color:T.textSub}}>{t.plan}</td>
+                  <td style={{padding:"12px 14px",color:T.blue,fontFamily:T.mono}}>{t.user_count}</td>
+                  <td style={{padding:"12px 14px",color:T.green,fontFamily:T.mono}}>{t.modules_enabled} / 6</td>
+                  <td style={{padding:"12px 14px",color:t.inactive?T.orange:T.textSub}}>
+                    {new Date(t.last_active).toLocaleDateString("it-IT")}
+                    {t.inactive&&<span style={{marginLeft:6,fontSize:10,color:T.orange}}>⚠</span>}
+                  </td>
+                  <td style={{padding:"12px 14px"}}>
+                    <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,fontWeight:600,
+                      background:t.inactive?"#1a0a0a":"#0a1a0a",
+                      color:t.inactive?T.orange:T.green,
+                      border:`1px solid ${t.inactive?T.orange:T.green}44`}}>
+                      {t.inactive?"Inattivo":"Attivo"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── HOME MODULE ──────────────────────────────────────────────────────────────
 function HomeModule({onSelectVehicle}){
   const {can}=usePerms();
@@ -2538,8 +3303,17 @@ function Dashboard(){
   const [sidebarOpen,setSidebarOpen]=useState(true);
   const {data:vehicles}=useApi("/gps/vehicles",{pollMs:10000,skip:!can("gps")});
 
+  const role=auth.user?.role;
+  const isSuperAdmin=role==="superadmin";
+  const isCompanyAdmin=role==="company_admin";
+
   // filter nav by permissions
   const nav=NAV_DEF.filter(n=>{
+    // superadmin: admin only (no company data)
+    if(isSuperAdmin) return n.id==="admin";
+    // company_admin: admin + all modules enabled in their tenant
+    if(isCompanyAdmin) return n.id==="admin"||n.module===null||can(n.module)||n.modules?.some(m=>can(m));
+    // regular roles: permission-based filter
     if(n.module===null&&!n.modules)return true;
     if(n.module)return can(n.module);
     if(n.modules)return n.modules.some(m=>can(m));
@@ -2557,13 +3331,23 @@ function Dashboard(){
 
   const renderModule=()=>{
     if(selectedVehicle) return <VehicleDetail vehicle={selectedVehicle} onBack={()=>setSelectedVehicle(null)}/>;
+    // Role-based admin panel routing
+    const adminPanel=isSuperAdmin
+      ? <SuperAdminDashboard/>
+      : isCompanyAdmin
+        ? <CompanyAdminPanel/>
+        : <AdminPanel/>;
+    // superadmin sees a special analytics (platform-level), others see regular analytics
+    const analyticsPanel=isSuperAdmin
+      ? <SuperAdminAnalytics/>
+      : <AnalyticsModule onSelectVehicle={setSelectedVehicle}/>;
     const map={
       home:<HomeModule onSelectVehicle={setSelectedVehicle}/>,
       gps:<GPSModule onSelectVehicle={setSelectedVehicle}/>,
       operativo:<OperativoModule/>,
-      analytics:<AnalyticsModule onSelectVehicle={setSelectedVehicle}/>,
+      analytics:analyticsPanel,
       fleet:<FlottaModule/>,
-      admin:<AdminPanel/>,
+      admin:adminPanel,
     };
     return map[active]||null;
   };

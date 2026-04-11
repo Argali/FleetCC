@@ -2,6 +2,15 @@ const bcrypt = require("bcryptjs");
 
 let users = [
   {
+    id: "u0",
+    name: "Super Admin",
+    email: "superadmin@fleetcc.dev",
+    password_hash: bcrypt.hashSync("superadmin2024!", 10),
+    role: "superadmin",
+    tenant_id: "fleetcc",
+    active: true,
+  },
+  {
     id: "u1",
     name: "Erwan Kervazo",
     email: "erwan.kervazo@cauto.it",
@@ -30,9 +39,18 @@ let users = [
     tenant_id: "cauto",
     active: true,
   },
+  {
+    id: "u4",
+    name: "Admin CAUTO",
+    email: "admin@cauto.it",
+    password_hash: bcrypt.hashSync("admin2024!", 10),
+    role: "company_admin",
+    tenant_id: "cauto",
+    active: true,
+  },
 ];
 
-let nextId = 3;
+let nextId = 5;
 
 module.exports = {
   getAllUsers: () => users,

@@ -585,12 +585,14 @@ function PuntiMap({punti,drawMode,onMapClick,onPuntoDelete}){
       });
       const lbl=p.nome?`<b style="font-size:13px">${p.nome}</b><br>`:"";
       const sub=[p.comune,p.materiale,p.sector].filter(Boolean).join(" · ");
-      m.bindPopup(`<div style="font-family:system-ui;min-width:130px">${lbl}${sub?`<div style="font-size:11px;color:#888;margin-bottom:4px">${sub}</div>`:""}<span style="font-size:11px;color:#666">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><br><button onclick="window._delPunto(${p.id})" style="margin-top:6px;font-size:11px;padding:3px 8px;background:#fee;border:1px solid #fcc;border-radius:4px;cursor:pointer;color:#c00">Elimina</button></div>`);
+      const btnId=`del-punto-${p.id}`;
+      m.bindPopup(`<div style="font-family:system-ui;min-width:130px">${lbl}${sub?`<div style="font-size:11px;color:#888;margin-bottom:4px">${sub}</div>`:""}<span style="font-size:11px;color:#666">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><br><button id="${btnId}" style="margin-top:6px;font-size:11px;padding:3px 8px;background:#fee;border:1px solid #fcc;border-radius:4px;cursor:pointer;color:#c00">Elimina</button></div>`);
+      m.on("popupopen",()=>{
+        document.getElementById(btnId)?.addEventListener("click",()=>{ if(cbDel.current)cbDel.current(p.id); });
+      });
       if(p.nome)m.bindTooltip(p.nome);
       layerRef.current.addLayer(m);
     });
-    window._delPunto=(id)=>{ if(cbDel.current)cbDel.current(id); };
-    return()=>{ delete window._delPunto; };
   },[punti]);
 
   return <div ref={containerRef} style={{height:"100%",width:"100%"}}/>;

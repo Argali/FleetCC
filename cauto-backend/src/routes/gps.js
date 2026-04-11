@@ -196,7 +196,7 @@ router.post("/routes/import-excel", requireAuth, requirePerm("gps", "edit"), upl
     res.json({ ok: true, data: { waypoints, unrecognized } });
   } catch (err) {
     console.error("Excel import error:", err);
-    res.status(500).json({ ok: false, error: `Errore elaborazione: ${err.message}` });
+    res.status(500).json({ ok: false, error: "Errore durante l'elaborazione del file. Controlla il formato e riprova." });
   }
 });
 
@@ -249,7 +249,7 @@ router.post("/routes/snap-to-roads", requireAuth, async (req, res) => {
       return res.json({ ok: false, error: "Valhalla non disponibile. Avvia il server di routing." });
     }
     console.error("snap-to-roads error:", err);
-    return res.status(500).json({ ok: false, error: `Errore snap-to-roads: ${err.message}` });
+    return res.status(500).json({ ok: false, error: "Errore durante lo snap-to-roads. Riprova o controlla i waypoint." });
   }
 });
 

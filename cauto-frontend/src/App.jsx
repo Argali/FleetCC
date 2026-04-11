@@ -6,6 +6,7 @@ import { Stage, Layer, Rect as KonvaRect, Ellipse as KonvaEllipse, Line as Konva
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const BASE_URL = API.replace(/\/api$/, "");
 
 // ─── THEME ────────────────────────────────────────────────────────────────────
 const T = {
@@ -516,7 +517,7 @@ function ZoneMap({zones,drawMode,zoneConfig,onShapeComplete,onZoneDelete}){
         const verts=[...clickVerts.current];
         clickVerts.current=[];cursorPos.current=null;
         previewLayerRef.current.clearLayers();
-        const id=Date.now();
+        const id=crypto.randomUUID();
         const base={id,name:cfg.name,comune:cfg.comune||"",materiale:cfg.materiale||"",sector:cfg.sector||"",fillColor:cfg.fillColor,fillOpacity:cfg.fillOpacity,borderColor:cfg.borderColor};
         if(cfg.type==="circle"){ const radius=L.latLng(verts[0]).distanceTo(L.latLng(verts[1])); cbComplete.current({...base,type:"circle",center:verts[0],radius}); }
         else if(cfg.type==="square"){ cbComplete.current({...base,type:"square",bounds:verts}); }
@@ -713,7 +714,7 @@ function GPSModule({onSelectVehicle}){
   const handlePuntiMapClick=useCallback((latlng)=>{
     if(!drawingPunti)return;
     setPuntoCfg(cfg=>{
-      const id=Date.now();
+      const id=crypto.randomUUID();
       setPunti(prev=>[...prev,{id,lat:latlng[0],lng:latlng[1],nome:cfg.nome,comune:cfg.comune,materiale:cfg.materiale,sector:cfg.sector,color:cfg.color}]);
       return cfg;
     });
@@ -732,7 +733,7 @@ function GPSModule({onSelectVehicle}){
   useEffect(()=>{ localStorage.setItem("fleetcc_gruppi",JSON.stringify(gruppi)); },[gruppi]);
   const saveGruppo=()=>{
     if(!gruppoCfg.name.trim())return;
-    setGruppi(prev=>[...prev,{...gruppoCfg,id:Date.now().toString()}]);
+    setGruppi(prev=>[...prev,{...gruppoCfg,id:crypto.randomUUID()}]);
     setEditingGruppo(false);
     setGruppoCfg(EMPTY_GRUPPO_CFG);
   };
@@ -751,7 +752,7 @@ function GPSModule({onSelectVehicle}){
   const saveCdr=()=>{
     if(!cdrMeta.name.trim())return;
     const entry={...cdrMeta,shapes:cdrShapes};
-    if(editingCdr==="new")setCdr(prev=>[...prev,{id:Date.now().toString(),...entry}]);
+    if(editingCdr==="new")setCdr(prev=>[...prev,{id:crypto.randomUUID(),...entry}]);
     else setCdr(prev=>prev.map(c=>c.id===editingCdr?{...c,...entry}:c));
     cancelCdrEdit();
   };
@@ -938,7 +939,7 @@ function GPSModule({onSelectVehicle}){
 
   const handleMapClick=useCallback((latlng)=>{
     if(editingId!==null&&annotMode){
-      const id=Date.now();
+      const id=crypto.randomUUID();
       setEditAnnotations(prev=>[...prev,{id,lat:latlng[0],lng:latlng[1],text:"",color:"#facc15"}]);
       setAnnotEditId(id);
       setAnnotMode(false);
@@ -2494,7 +2495,7 @@ function SegnalazioniModule(){
                 </div>
               </div>
               <div style={{fontSize:13,color:T.text+"aa",lineHeight:1.6,marginBottom:10}}>{s.description}</div>
-              {s.photo_url&&<div style={{marginBottom:10}}><img src={`http://localhost:3001${s.photo_url}`} alt="foto" style={{maxHeight:220,maxWidth:"100%",borderRadius:8,border:`1px solid ${T.border}`,display:"block",cursor:"pointer"}} onClick={()=>window.open(`http://localhost:3001${s.photo_url}`,"_blank")}/></div>}
+              {s.photo_url&&<div style={{marginBottom:10}}><img src={`${BASE_URL}${s.photo_url}`} alt="foto" style={{maxHeight:220,maxWidth:"100%",borderRadius:8,border:`1px solid ${T.border}`,display:"block",cursor:"pointer"}} onClick={()=>window.open(`${BASE_URL}${s.photo_url}`,"_blank")}/></div>}
               <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
                 <div style={{fontSize:11,color:T.textDim}}>👤 {s.reporter_name}</div>
                 {s.available_from&&<div style={{fontSize:11,color:T.textDim}}>🔧 Disponibile dal {s.available_from}</div>}

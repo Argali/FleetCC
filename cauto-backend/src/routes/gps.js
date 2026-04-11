@@ -72,7 +72,8 @@ router.get("/vehicles", requireAuth, requirePerm("gps", "view"), async (_req, re
   try {
     res.json({ ok: true, data: await adapter.getVehicles() });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error("GET /gps/vehicles:", err);
+    res.status(500).json({ ok: false, error: "Errore interno del server" });
   }
 });
 
@@ -80,7 +81,8 @@ router.get("/routes", requireAuth, requirePerm("gps", "view"), async (_req, res)
   try {
     res.json({ ok: true, data: await adapter.getRoutes() });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error("GET /gps/routes:", err);
+    res.status(500).json({ ok: false, error: "Errore interno del server" });
   }
 });
 
@@ -91,17 +93,21 @@ router.post("/routes", requireAuth, requirePerm("gps", "edit"), async (req, res)
     const r = await adapter.createRoute({ name, color: color||"#4ade80", sector: sector||"", vehicle: vehicle||"", status: status||"pianificato", stops: stops||0, waypoints });
     res.status(201).json({ ok: true, data: r });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error("POST /gps/routes:", err);
+    res.status(500).json({ ok: false, error: "Errore interno del server" });
   }
 });
 
 router.put("/routes/:id", requireAuth, requirePerm("gps", "edit"), async (req, res) => {
   try {
-    const r = await adapter.updateRoute(req.params.id, req.body);
+    // Whitelist only known fields — never pass req.body directly to the adapter
+    const { name, color, opacity, sector, vehicle, status, stops, waypoints, annotations } = req.body;
+    const r = await adapter.updateRoute(req.params.id, { name, color, opacity, sector, vehicle, status, stops, waypoints, annotations });
     if (!r) return res.status(404).json({ ok: false, error: "Percorso non trovato" });
     res.json({ ok: true, data: r });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error("PUT /gps/routes/:id:", err);
+    res.status(500).json({ ok: false, error: "Errore interno del server" });
   }
 });
 
@@ -111,7 +117,8 @@ router.delete("/routes/:id", requireAuth, requirePerm("gps", "edit"), async (req
     if (!ok) return res.status(404).json({ ok: false, error: "Percorso non trovato" });
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error("DELETE /gps/routes/:id:", err);
+    res.status(500).json({ ok: false, error: "Errore interno del server" });
   }
 });
 

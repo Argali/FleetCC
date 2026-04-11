@@ -36,8 +36,8 @@ router.post("/users", requireAuth, requireAnyRole("fleet_manager", "company_admi
   if (!ROLES.includes(role))
     return res.status(400).json({ ok: false, error: "Ruolo non valido" });
 
-  // company_admin cannot assign superadmin or company_admin roles
-  if (req.user.role === "company_admin" && SUPER_ONLY_ROLES.includes(role))
+  // Only superadmin can assign superadmin or company_admin roles
+  if (req.user.role !== "superadmin" && SUPER_ONLY_ROLES.includes(role))
     return res.status(403).json({ ok: false, error: "Non puoi assegnare questo ruolo" });
 
   if (usersStore.findUserByEmail(email))
@@ -76,8 +76,8 @@ router.patch("/users/:id", requireAuth, requireAnyRole("fleet_manager", "company
   if (role && !ROLES.includes(role))
     return res.status(400).json({ ok: false, error: `Ruolo non valido: ${role}` });
 
-  // company_admin cannot promote to superadmin/company_admin
-  if (req.user.role === "company_admin" && role && SUPER_ONLY_ROLES.includes(role))
+  // Only superadmin can promote to superadmin/company_admin
+  if (req.user.role !== "superadmin" && role && SUPER_ONLY_ROLES.includes(role))
     return res.status(403).json({ ok: false, error: "Non puoi assegnare questo ruolo" });
 
   const updates = {};

@@ -346,7 +346,7 @@ function VehicleDetail({vehicle,onBack}){
 }
 
 // ─── GPS MAP ──────────────────────────────────────────────────────────────────
-function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColor,zones,punti,onMapClick,onWaypointMove,onWaypointDelete,searchMarkerRef,snappedSegments,snapMode,onPathClick,annotations=[]}){
+function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColor,zones,punti,onMapClick,onWaypointMove,onWaypointDelete,searchMarkerRef,snappedSegments,snapMode,onPathClick,annotations=[],cdr=[],onCdrClick}){
   const containerRef=useRef(null);
   const mapRef=useRef(null);
   const routeLayerRef=useRef(null);
@@ -355,14 +355,17 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
   const zoneLayerRef=useRef(null);
   const puntiLayerRef=useRef(null);
   const annotLayerRef=useRef(null);
+  const cdrLayerRef=useRef(null);
   const cbClick=useRef(onMapClick);
   const cbMove=useRef(onWaypointMove);
   const cbDel=useRef(onWaypointDelete);
   const cbPathClick=useRef(onPathClick);
+  const cbCdrClick=useRef(onCdrClick);
   useEffect(()=>{cbClick.current=onMapClick;},[onMapClick]);
   useEffect(()=>{cbMove.current=onWaypointMove;},[onWaypointMove]);
   useEffect(()=>{cbDel.current=onWaypointDelete;},[onWaypointDelete]);
   useEffect(()=>{cbPathClick.current=onPathClick;},[onPathClick]);
+  useEffect(()=>{cbCdrClick.current=onCdrClick;},[onCdrClick]);
 
   useEffect(()=>{
     if(!containerRef.current||mapRef.current)return;
@@ -372,6 +375,7 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
     zoneLayerRef.current=L.layerGroup().addTo(map);
     puntiLayerRef.current=L.layerGroup().addTo(map);
     annotLayerRef.current=L.layerGroup().addTo(map);
+    cdrLayerRef.current=L.layerGroup().addTo(map);
     vehicleLayerRef.current=L.layerGroup().addTo(map);
     editLayerRef.current=L.layerGroup().addTo(map);
     map.on("click",(e)=>{ if(cbClick.current)cbClick.current([e.latlng.lat,e.latlng.lng]); });
@@ -423,6 +427,24 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
       puntiLayerRef.current.addLayer(m);
     });
   },[punti]);
+
+  // CDR markers (geolocated centres)
+  useEffect(()=>{
+    if(!mapRef.current||!cdrLayerRef.current)return;
+    cdrLayerRef.current.clearLayers();
+    (cdr||[]).filter(c=>c.lat&&c.lng).forEach(c=>{
+      const icon=L.divIcon({
+        className:"",
+        html:`<div title="${c.name}" style="width:30px;height:30px;background:${c.color};border:2.5px solid #fff;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;">♻</div>`,
+        iconSize:[30,30],iconAnchor:[15,15],
+      });
+      const m=L.marker([c.lat,c.lng],{icon,zIndexOffset:500});
+      const sub=[c.comune,c.materiale,c.sector].filter(Boolean).join(" · ");
+      m.bindTooltip(`<b>${c.name}</b>${c.address?`<br><span style="font-size:10px;color:#aaa">${c.address}</span>`:""}${sub?`<br><span style="font-size:10px;color:#888">${sub}</span>`:""}`,{sticky:false});
+      m.on("click",()=>{ if(cbCdrClick.current)cbCdrClick.current(c); });
+      cdrLayerRef.current.addLayer(m);
+    });
+  },[cdr]);
 
   useEffect(()=>{
     if(!mapRef.current||!annotLayerRef.current)return;
@@ -655,7 +677,7 @@ const EMPTY_META={name:"",color:"#4ade80",opacity:0.85,comune:"",materiale:"",se
 const EMPTY_ZONE_CFG={type:"circle",name:"",comune:"",materiale:"",sector:"",fillColor:"#60a5fa",fillOpacity:0.3,borderColor:"#3a7bd5"};
 const EMPTY_PUNTO_CFG={nome:"",comune:"",materiale:"",sector:"",color:"#f87171"};
 const EMPTY_GRUPPO_CFG={name:"",color:"#60a5fa",routeIds:[],zoneIds:[],puntiIds:[]};
-const EMPTY_CDR_META={name:"",comune:"",materiale:"",sector:"",color:"#60a5fa",opacity:0.5};
+const EMPTY_CDR_META={name:"",comune:"",materiale:"",sector:"",address:"",lat:null,lng:null,color:"#60a5fa",opacity:0.5};
 
 function GPSModule({onSelectVehicle,mode="live"}){
   const {auth}=useAuth();
@@ -798,7 +820,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
   const [cdrShapes,setCdrShapes]=useState([]);
   useEffect(()=>{localStorage.setItem("fleetcc_cdr",JSON.stringify(cdr));},[cdr]);
   const startNewCdr=()=>{setEditingCdr("new");setCdrMeta({...EMPTY_CDR_META});setCdrShapes([]);};
-  const editCdrItem=(c)=>{setEditingCdr(c.id);setCdrMeta({name:c.name,comune:c.comune||"",materiale:c.materiale||"",sector:c.sector||"",color:c.color,opacity:c.opacity??0.5});setCdrShapes(c.shapes||[]);};
+  const editCdrItem=(c)=>{setEditingCdr(c.id);setCdrMeta({name:c.name,comune:c.comune||"",materiale:c.materiale||"",sector:c.sector||"",address:c.address||"",lat:c.lat||null,lng:c.lng||null,color:c.color,opacity:c.opacity??0.5});setCdrShapes(c.shapes||[]);};
   const cancelCdrEdit=()=>{setEditingCdr(null);setCdrMeta(EMPTY_CDR_META);setCdrShapes([]);};
   const saveCdr=()=>{
     if(!cdrMeta.name.trim())return;
@@ -808,6 +830,23 @@ function GPSModule({onSelectVehicle,mode="live"}){
     cancelCdrEdit();
   };
   const deleteCdr=(id)=>{if(window.confirm("Eliminare questo centro di raccolta?"))setCdr(prev=>prev.filter(c=>c.id!==id));};
+
+  // ── CDR geocoding ─────────────────────────────────────────────────────────
+  const [cdrGeoLoading,setCdrGeoLoading]=useState(false);
+  const cdrGeoAbortRef=useRef(null);
+  const geocodeCdrAddress=useCallback(async(addr)=>{
+    const q=(addr||cdrMeta.address||"").trim();
+    if(!q)return;
+    if(cdrGeoAbortRef.current)cdrGeoAbortRef.current.abort();
+    cdrGeoAbortRef.current=new AbortController();
+    setCdrGeoLoading(true);
+    try{
+      const res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`,{headers:{"Accept-Language":"it"},signal:cdrGeoAbortRef.current.signal});
+      const data=await res.json();
+      if(data.length>0)setCdrMeta(m=>({...m,lat:parseFloat(data[0].lat),lng:parseFloat(data[0].lon)}));
+    }catch(e){if(e.name!=="AbortError")setCdrMeta(m=>({...m,lat:null,lng:null}));}
+    setCdrGeoLoading(false);
+  },[cdrMeta.address]);
 
   const searchAddress=useCallback(async(q)=>{
     if(!q.trim()){setSearchResults([]);return;}
@@ -1217,6 +1256,8 @@ function GPSModule({onSelectVehicle,mode="live"}){
             onMapClick={handleMapClick} onWaypointMove={handleWaypointMove} onWaypointDelete={handleWaypointDelete} onPathClick={handleInsertControlPoint}
             searchMarkerRef={tab==="live"?liveMapRef:null}
             annotations={visibleAnnotations}
+            cdr={tab==="live"?cdr.filter(c=>c.lat&&c.lng):[]}
+            onCdrClick={tab==="live"?(c)=>{setTab("cdr");editCdrItem(c);}:null}
           />}
           {tab==="zone"&&<ZoneMap zones={zones} drawMode={drawingZone} zoneConfig={zoneCfg} onShapeComplete={handleShapeComplete} onZoneDelete={deleteZone}/>}
           {tab==="punti"&&<PuntiMap punti={punti} drawMode={drawingPunti} onMapClick={handlePuntiMapClick} onPuntoDelete={deletePunto}/>}
@@ -1878,7 +1919,8 @@ function GPSModule({onSelectVehicle,mode="live"}){
                   <span style={{fontSize:13,fontWeight:600,color:T.text,flex:1}}>{c.name}</span>
                   <span style={{fontSize:9,color:T.textDim,background:T.bg,padding:"2px 6px",borderRadius:4}}>{(c.shapes||[]).length} forme</span>
                 </div>
-                <div style={{fontSize:11,color:T.textSub,marginBottom:10}}>{[c.comune,c.materiale,c.sector].filter(Boolean).join(" · ")||"—"}</div>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:4}}>{[c.comune,c.materiale,c.sector].filter(Boolean).join(" · ")||"—"}</div>
+                {c.address&&<div style={{fontSize:10,color:c.lat&&c.lng?T.green:T.textDim,marginBottom:8,display:"flex",alignItems:"center",gap:4}}><span>{c.lat&&c.lng?"📍":"⚠"}</span><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.address}</span></div>}
                 <div style={{display:"flex",gap:6}}>
                   {canEdit&&<button onClick={()=>editCdrItem(c)} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"5px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Modifica</button>}
                   {canEdit&&<button onClick={()=>deleteCdr(c.id)} style={{background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:6,color:T.red,padding:"5px 10px",cursor:"pointer",fontSize:12,fontFamily:T.font}}>Elimina</button>}
@@ -1900,6 +1942,24 @@ function GPSModule({onSelectVehicle,mode="live"}){
                     style={{width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"8px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
                 </div>
               ))}
+              {/* ── Address + geocoding ── */}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:11,color:T.textSub,marginBottom:4,fontWeight:600}}>Indirizzo (per mappa)</div>
+                <div style={{display:"flex",gap:6}}>
+                  <input value={cdrMeta.address||""} placeholder="Via, numero, città..."
+                    onChange={e=>setCdrMeta(m=>({...m,address:e.target.value,lat:null,lng:null}))}
+                    onKeyDown={e=>e.key==="Enter"&&geocodeCdrAddress()}
+                    style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"8px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
+                  <button onClick={()=>geocodeCdrAddress()} disabled={cdrGeoLoading||!cdrMeta.address?.trim()}
+                    title="Geolocalizza indirizzo"
+                    style={{padding:"8px 10px",background:T.navActive,border:`1px solid ${T.blue}44`,borderRadius:6,color:cdrGeoLoading?T.textDim:T.blue,cursor:cdrGeoLoading?"wait":"pointer",fontSize:13,fontFamily:T.font,flexShrink:0}}>
+                    {cdrGeoLoading?"…":"📍"}
+                  </button>
+                </div>
+                {cdrMeta.lat&&cdrMeta.lng
+                  ?<div style={{fontSize:10,color:T.green,marginTop:4,fontFamily:T.mono}}>✓ {cdrMeta.lat.toFixed(5)}, {cdrMeta.lng.toFixed(5)}</div>
+                  :<div style={{fontSize:10,color:T.textDim,marginTop:4}}>Inserisci l'indirizzo e premi 📍 per posizionarlo sulla mappa</div>}
+              </div>
               <div style={{marginBottom:12}}>
                 <div style={{fontSize:11,color:T.textSub,marginBottom:6,fontWeight:600}}>Colore</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>

@@ -43,6 +43,7 @@ app.use("/api/admin",       require("./routes/users-admin"));
 app.use("/api/segnalazioni",require("./routes/segnalazioni"));
 app.use("/api/reports",     require("./routes/reports"));
 app.use("/api/superadmin",  require("./routes/superadmin"));
+app.use("/api/bugs",        require("./routes/bugs"));
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Cauto backend running on http://localhost:${PORT}`));

@@ -5,8 +5,101 @@ import { API } from "../api";
 import { MODULE_META } from "../constants/moduleMeta";
 import Spinner from "./ui/Spinner";
 
+const BUG_STATUS_META={
+  new:         {label:"Nuovo",      color:T.blue,   bg:"#0a1a2a"},
+  in_progress: {label:"In corso",   color:T.orange, bg:"#1a0f00"},
+  resolved:    {label:"Risolto",    color:T.green,  bg:"#0a1a0a"},
+  wontfix:     {label:"Non fix",    color:T.textDim,bg:"#1a1a1a"},
+};
+const BUG_CAT_LABEL={ui:"UI",funzionalita:"Funzionalità",performance:"Performance",errore:"Errore",altro:"Altro"};
+
+function BugReportsPanel({auth}){
+  const [bugs,setBugs]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [filter,setFilter]=useState("new");
+
+  const load=useCallback(async()=>{
+    setLoading(true);
+    try{
+      const r=await fetch(`${API}/bugs`,{headers:{Authorization:`Bearer ${auth.token}`}});
+      const d=await r.json();
+      if(d.ok)setBugs(d.data);
+    }catch{}
+    setLoading(false);
+  },[auth.token]);
+
+  useEffect(()=>{load();},[load]);
+
+  const setStatus=async(id,status)=>{
+    await fetch(`${API}/bugs/${id}`,{method:"PATCH",headers:{Authorization:`Bearer ${auth.token}`,"Content-Type":"application/json"},body:JSON.stringify({status})});
+    load();
+  };
+
+  const counts={};
+  Object.keys(BUG_STATUS_META).forEach(s=>{counts[s]=bugs.filter(b=>b.status===s).length;});
+  const visible=filter==="all"?bugs:bugs.filter(b=>b.status===filter);
+
+  return(
+    <div style={{fontFamily:T.font,display:"flex",flexDirection:"column",gap:16}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontSize:18,fontWeight:700,color:T.text}}>Bug Report</div>
+          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>{bugs.length} segnalazioni totali</div>
+        </div>
+        <button onClick={load} style={{fontSize:11,padding:"5px 12px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,color:T.textSub,cursor:"pointer",fontFamily:T.font}}>↻ Aggiorna</button>
+      </div>
+
+      {/* Filter tabs */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {[["all","Tutti",bugs.length],...Object.entries(BUG_STATUS_META).map(([s,m])=>[s,m.label,counts[s]])].map(([s,lbl,cnt])=>(
+          <button key={s} onClick={()=>setFilter(s)}
+            style={{padding:"5px 14px",borderRadius:20,fontSize:12,fontWeight:filter===s?700:400,cursor:"pointer",fontFamily:T.font,border:`1px solid ${filter===s?T.blue:T.border}`,background:filter===s?T.navActive:"transparent",color:filter===s?T.blue:T.textSub}}>
+            {lbl} <span style={{opacity:0.7}}>({cnt})</span>
+          </button>
+        ))}
+      </div>
+
+      {loading?<Spinner/>:visible.length===0
+        ?<div style={{color:T.textDim,fontSize:13,textAlign:"center",padding:"24px 0"}}>Nessun bug report in questa categoria</div>
+        :(
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {visible.map(b=>{
+              const sm=BUG_STATUS_META[b.status]||BUG_STATUS_META.new;
+              return(
+                <div key={b.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"14px 18px"}}>
+                  <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:8}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
+                        <span style={{fontSize:14,fontWeight:700,color:T.text}}>{b.title}</span>
+                        <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:"#1a2a3a",color:T.blue,fontWeight:600}}>{BUG_CAT_LABEL[b.category]||b.category}</span>
+                        <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:sm.bg,color:sm.color,fontWeight:600,border:`1px solid ${sm.color}44`}}>{sm.label}</span>
+                      </div>
+                      <div style={{fontSize:12,color:T.textSub}}>{b.reportedBy?.name} · {b.reportedBy?.email} · {new Date(b.createdAt).toLocaleString("it-IT")}</div>
+                    </div>
+                  </div>
+                  <div style={{fontSize:13,color:T.text,background:T.bg,borderRadius:6,padding:"10px 12px",marginBottom:b.steps?8:12,whiteSpace:"pre-wrap",lineHeight:1.5}}>{b.description}</div>
+                  {b.steps&&<div style={{fontSize:12,color:T.textSub,background:T.bg,borderRadius:6,padding:"8px 12px",marginBottom:12,whiteSpace:"pre-wrap"}}>Passi: {b.steps}</div>}
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {Object.entries(BUG_STATUS_META).filter(([s])=>s!==b.status).map(([s,m])=>(
+                      <button key={s} onClick={()=>setStatus(b.id,s)}
+                        style={{fontSize:11,padding:"4px 12px",background:"transparent",border:`1px solid ${m.color}44`,borderRadius:6,color:m.color,cursor:"pointer",fontFamily:T.font}}>
+                        → {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      }
+    </div>
+  );
+}
+
 export default function SuperAdminDashboard(){
   const {auth}=useAuth();
+  const [tab,setTab]=useState("tenants");
   const [tenants,setTenants]=useState([]);
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState({});
@@ -59,10 +152,23 @@ export default function SuperAdminDashboard(){
   const now=Date.now();
   const sevenDays=7*24*60*60*1000;
 
-  if(loading) return <Spinner/>;
+  if(loading&&tab==="tenants") return <Spinner/>;
 
   return(
     <div style={{fontFamily:T.font,display:"flex",flexDirection:"column",gap:20}}>
+      {/* Tab bar */}
+      <div style={{display:"flex",gap:4,borderBottom:`1px solid ${T.border}`,paddingBottom:0}}>
+        {[["tenants","🏢 Tenant"],["bugs","🐛 Bug Report"]].map(([id,lbl])=>(
+          <button key={id} onClick={()=>setTab(id)}
+            style={{padding:"8px 18px",background:"transparent",border:"none",borderBottom:tab===id?`2px solid ${T.blue}`:"2px solid transparent",color:tab===id?T.blue:T.textSub,cursor:"pointer",fontFamily:T.font,fontSize:13,fontWeight:tab===id?700:400,marginBottom:-1}}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+
+      {tab==="bugs"&&<BugReportsPanel auth={auth}/>}
+
+      {tab==="tenants"&&<>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
           <div style={{fontSize:18,fontWeight:700,color:T.text}}>Gestione Tenant</div>
@@ -117,6 +223,7 @@ export default function SuperAdminDashboard(){
           </div>
         );
       })}
+      </>}
     </div>
   );
 }

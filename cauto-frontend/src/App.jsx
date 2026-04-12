@@ -1053,7 +1053,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
 
   const ALL_GPS_TABS=[
     {id:"live",    label:"GPS Live",            icon:"M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0 M12 7v5l3 3",                                                        modes:["live"]},
-    {id:"cdr",     label:"Centri di Raccolta",  icon:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10",                                           modes:["live"]},
+    {id:"cdr",     label:"Centri di Raccolta",  icon:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10",                                           modes:["live","editors"]},
     {id:"editor",  label:"Percorsi",            icon:"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7",                                             modes:["editors"]},
     {id:"zone",    label:"Zone",                icon:"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",                                                 modes:["editors"]},
     {id:"punti",   label:"Punti",               icon:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z M12 10m-3 0a3 3 0 1 0 6 0 3 3 0 1 0-6 0",                modes:["editors"]},

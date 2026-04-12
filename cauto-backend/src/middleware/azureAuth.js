@@ -1,7 +1,7 @@
 const jwksRsa = require("jwks-rsa");
 const jwt    = require("jsonwebtoken");
 
-const CLIENT_ID = "e8585fda-9c50-4dcc-be6d-cd1ac2a9bc22";
+const CLIENT_ID = "3c3b2922-0d6c-4f87-a769-55607b3e981e";
 const TENANT_ID = "65e803c0-672a-4162-85a7-e1a402843bd2";
 
 // Personal Microsoft accounts use a fixed tenant ID

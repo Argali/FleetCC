@@ -657,13 +657,13 @@ const EMPTY_PUNTO_CFG={nome:"",comune:"",materiale:"",sector:"",color:"#f87171"}
 const EMPTY_GRUPPO_CFG={name:"",color:"#60a5fa",routeIds:[],zoneIds:[],puntiIds:[]};
 const EMPTY_CDR_META={name:"",comune:"",materiale:"",sector:"",color:"#60a5fa",opacity:0.5};
 
-function GPSModule({onSelectVehicle}){
+function GPSModule({onSelectVehicle,mode="live"}){
   const {auth}=useAuth();
   const {can}=usePerms();
   const {data:vehicles,loading,error,refetch}=useApi("/gps/vehicles",{pollMs:10000});
   const [routes,setRoutes]=useState(null);
   const [visibleRoutes,setVisibleRoutes]=useState({});
-  const [tab,setTab]=useState("live");
+  const [tab,setTab]=useState(mode==="editors"?"editor":"live");
   const [editingId,setEditingId]=useState(null);
   const [editWaypoints,setEditWaypoints]=useState([]);
   const [meta,setMeta]=useState(EMPTY_META);
@@ -1051,13 +1051,14 @@ function GPSModule({onSelectVehicle}){
 
   if(loading)return<Spinner/>;if(error)return<ApiError error={error} onRetry={refetch}/>;
 
-  const gpsTabs=[
-    {id:"live",    label:"GPS Live",       icon:"M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0 M12 7v5l3 3"},
-    {id:"editor",  label:"Editor Percorsi",icon:"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"},
-    {id:"zone",    label:"Editor Zone",    icon:"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"},
-    {id:"punti",   label:"Editor Punti",   icon:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z M12 10m-3 0a3 3 0 1 0 6 0 3 3 0 1 0-6 0"},
-    {id:"cdr",     label:"Centri di Raccolta", icon:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10"},
+  const ALL_GPS_TABS=[
+    {id:"live",    label:"GPS Live",            icon:"M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0 M12 7v5l3 3",                                                        modes:["live"]},
+    {id:"cdr",     label:"Centri di Raccolta",  icon:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10",                                           modes:["live"]},
+    {id:"editor",  label:"Percorsi",            icon:"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7",                                             modes:["editors"]},
+    {id:"zone",    label:"Zone",                icon:"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",                                                 modes:["editors"]},
+    {id:"punti",   label:"Punti",               icon:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z M12 10m-3 0a3 3 0 1 0 6 0 3 3 0 1 0-6 0",                modes:["editors"]},
   ];
+  const gpsTabs=ALL_GPS_TABS.filter(t=>t.modes.includes(mode));
 
   return(
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 130px)",fontFamily:T.font}}>
@@ -3502,10 +3503,11 @@ function HomeModule({onSelectVehicle}){
   );
 }
 
-// ─── NAV DEFINITION (6 top-level items) ───────────────────────────────────────
+// ─── NAV DEFINITION (7 top-level items) ───────────────────────────────────────
 const NAV_DEF=[
   {id:"home",      label:"Dashboard",  short:"Home",      icon:"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10", module:null},
   {id:"gps",       label:"GPS Live",   short:"GPS",       icon:"M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7z M9 4v13 M15 7v13",          module:"gps"},
+  {id:"editors",   label:"Editori",    short:"Editori",   icon:"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",        module:"gps"},
   {id:"operativo", label:"Operativo",  short:"Operativo", icon:"M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z M12 9v4 M12 17h.01", module:null},
   {id:"analytics", label:"Analytics",  short:"Analytics", icon:"M18 20V10 M12 20V4 M6 20v-6",                                    module:null},
   {id:"fleet",     label:"Flotta",     short:"Flotta",    icon:"M3 22V8l9-6 9 6v14H3z M9 22v-6h6v6",                             modules:["fuel","suppliers","costs"]},
@@ -3561,7 +3563,8 @@ function Dashboard(){
       : <AnalyticsModule onSelectVehicle={setSelectedVehicle}/>;
     const map={
       home:<HomeModule onSelectVehicle={setSelectedVehicle}/>,
-      gps:<GPSModule onSelectVehicle={setSelectedVehicle}/>,
+      gps:<GPSModule mode="live" onSelectVehicle={setSelectedVehicle}/>,
+      editors:<GPSModule mode="editors" onSelectVehicle={setSelectedVehicle}/>,
       operativo:<OperativoModule/>,
       analytics:analyticsPanel,
       fleet:<FlottaModule/>,

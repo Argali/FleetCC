@@ -68,13 +68,23 @@ function usePerms() { return useContext(PermContext); }
 function useApi(path, { pollMs=0, skip=false }={}) {
   const { auth, logout } = useAuth();
   const [data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState(null);
+  const abortRef=useRef(null);
   const fetch_ = useCallback(()=>{
     if(skip){ setLoading(false); return; }
-    fetch(`${API}${path}`,{headers:{Authorization:`Bearer ${auth?.token}`}})
+    if(abortRef.current) abortRef.current.abort();
+    abortRef.current=new AbortController();
+    const signal=abortRef.current.signal;
+    fetch(`${API}${path}`,{headers:{Authorization:`Bearer ${auth?.token}`},signal})
       .then(r=>{ if(r.status===401){logout();throw new Error("Sessione scaduta");} if(!r.ok)throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(r=>{ setData(r.data); setError(null); }).catch(e=>setError(e.message)).finally(()=>setLoading(false));
+      .then(r=>{ if(!signal.aborted){setData(r.data);setError(null);} })
+      .catch(e=>{ if(!signal.aborted&&e.name!=="AbortError")setError(e.message); })
+      .finally(()=>{ if(!signal.aborted)setLoading(false); });
   },[path,auth?.token,logout,skip]);
-  useEffect(()=>{ fetch_(); if(pollMs>0){const id=setInterval(fetch_,pollMs);return()=>clearInterval(id);} },[fetch_,pollMs]);
+  useEffect(()=>{
+    fetch_();
+    if(pollMs>0){const id=setInterval(fetch_,pollMs);return()=>{clearInterval(id);abortRef.current?.abort();};}
+    return()=>abortRef.current?.abort();
+  },[fetch_,pollMs]);
   return {data,loading,error,refetch:fetch_};
 }
 
@@ -91,7 +101,8 @@ function ApiError({error,onRetry}){return<div style={{background:"#1a0a0a",borde
 
 // ─── FLEETCC LOGO ─────────────────────────────────────────────────────────────
 function FleetLogo({size=36}){
-  const id=`grad${size}`;
+  const uid=React.useId().replace(/:/g,"");
+  const id=`grad-${uid}`;
   return(
     <svg width={size} height={size} viewBox="0 0 100 100">
       <defs><linearGradient id={id} x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stopColor="#22c55e"/><stop offset="100%" stopColor="#06b6d4"/></linearGradient></defs>
@@ -732,6 +743,7 @@ function GPSModule({onSelectVehicle}){
   const [searchLoading,setSearchLoading]=useState(false);
   const liveMapRef=useRef(null);
   const searchPinRef=useRef(null);
+  const nominatimAbortRef=useRef(null);
   useEffect(()=>{ localStorage.setItem("fleetcc_zones",JSON.stringify(zones)); },[zones]);
   useEffect(()=>{ setVisibleZones(prev=>{ const n={...prev}; zones.forEach(z=>{ if(!(z.id in n))n[z.id]=true; }); return n; }); },[zones]);
   const toggleZone=(id)=>setVisibleZones(prev=>({...prev,[id]:!prev[id]}));
@@ -799,13 +811,16 @@ function GPSModule({onSelectVehicle}){
 
   const searchAddress=useCallback(async(q)=>{
     if(!q.trim()){setSearchResults([]);return;}
+    if(nominatimAbortRef.current) nominatimAbortRef.current.abort();
+    nominatimAbortRef.current=new AbortController();
+    const signal=nominatimAbortRef.current.signal;
     setSearchLoading(true);
     try{
-      const res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`,{headers:{"Accept-Language":"it"}});
+      const res=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`,{headers:{"Accept-Language":"it"},signal});
       const data=await res.json();
-      setSearchResults(data);
-    }catch{}
-    setSearchLoading(false);
+      if(!signal.aborted) setSearchResults(data);
+    }catch(e){ if(e.name!=="AbortError") setSearchResults([]); }
+    if(!signal.aborted) setSearchLoading(false);
   },[]);
 
   const flyToResult=useCallback((r)=>{
@@ -2609,7 +2624,7 @@ function FuelModule(){
       <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:12,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
           <thead><tr style={{background:T.bg}}>{["Data","Veicolo","Litri","Costo","KM","Stazione"].map(h=><th key={h} style={{padding:"12px 16px",textAlign:"left",color:T.textSub,fontWeight:600,fontSize:11,textTransform:"uppercase",letterSpacing:0.5}}>{h}</th>)}</tr></thead>
-          <tbody>{entries.map((e,i)=><tr key={i} style={{borderTop:`1px solid ${T.border}`}}>
+          <tbody>{entries.map((e)=><tr key={`${e.date}-${e.vehicle}-${e.km}`} style={{borderTop:`1px solid ${T.border}`}}>
             <td style={{padding:"12px 16px",color:T.textSub,fontFamily:T.mono,fontSize:12}}>{e.date}</td>
             <td style={{padding:"12px 16px",color:T.text,fontWeight:500}}>{e.vehicle}</td>
             <td style={{padding:"12px 16px",color:T.green,fontFamily:T.mono}}>{e.liters} L</td>
@@ -3155,11 +3170,10 @@ function CompanyAdminPanel(){
 
   useEffect(()=>{ load(); },[load]);
 
-  // Load tenant modules from superadmin endpoint (read-only view for company_admin)
+  // Load tenant modules from auth context (populated at login time)
   useEffect(()=>{
-    const stored=localStorage.getItem("tenant_modules");
-    if(stored){ try{ setTenantModules(JSON.parse(stored)); }catch{} }
-  },[]);
+    if(auth?.tenant?.modules) setTenantModules(auth.tenant.modules);
+  },[auth?.tenant?.modules]);
 
   const inp={width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",color:T.text,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:T.font};
 

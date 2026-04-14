@@ -41,6 +41,7 @@ app.use("/api/costs",       require("./routes/costs"));
 app.use("/api/permissions", require("./routes/permissions"));
 app.use("/api/admin",       require("./routes/users-admin"));
 app.use("/api/segnalazioni",require("./routes/segnalazioni"));
+app.use("/api/segnalazioni-territorio",require("./routes/segnalazioni-territorio"));
 app.use("/api/reports",     require("./routes/reports"));
 app.use("/api/superadmin",  require("./routes/superadmin"));
 app.use("/api/bugs",        require("./routes/bugs"));

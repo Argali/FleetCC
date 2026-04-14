@@ -802,6 +802,10 @@ function GPSModule({onSelectVehicle,mode="live"}){
   const [searchAddr,setSearchAddr]=useState("");
   const [searchResults,setSearchResults]=useState([]);
   const [searchLoading,setSearchLoading]=useState(false);
+  const [selectedSearchResult,setSelectedSearchResult]=useState(null); // {lat,lng,address}
+  const [segTerritorio,setSegTerritorio]=useState({tipo:"",note:""});
+  const [segTerritorioMsg,setSegTerritorioMsg]=useState(null);
+  const [segTerritorioSending,setSegTerritorioSending]=useState(false);
   const liveMapRef=useRef(null);
   const searchPinRef=useRef(null);
   const nominatimAbortRef=useRef(null);
@@ -910,7 +914,37 @@ function GPSModule({onSelectVehicle,mode="live"}){
     searchPinRef.current=L.marker([lat,lng],{icon:L.divIcon({className:"",html:`<div style="width:22px;height:22px;background:#f87171;border:3px solid #fff;border-radius:50%;box-shadow:0 0 8px rgba(0,0,0,0.6)"></div>`,iconSize:[22,22],iconAnchor:[11,11]})})
       .addTo(map).bindPopup(`<b style="font-size:12px">${r.display_name}</b>`).openPopup();
     setSearchResults([]);setSearchAddr(r.display_name);
+    setSelectedSearchResult({lat,lng,address:r.display_name});
+    setSegTerritorio({tipo:"",note:""});setSegTerritorioMsg(null);
   },[]);
+
+  const submitSegTerritorio=useCallback(async()=>{
+    if(!segTerritorio.tipo){setSegTerritorioMsg({ok:false,text:"Seleziona un tipo"});return;}
+    if(segTerritorio.tipo==="altro"&&!segTerritorio.note.trim()){setSegTerritorioMsg({ok:false,text:"Aggiungi una nota per 'Altro'"});return;}
+    setSegTerritorioSending(true);setSegTerritorioMsg(null);
+    try{
+      const res=await fetch(`${API}/segnalazioni-territorio`,{
+        method:"POST",
+        headers:{Authorization:`Bearer ${auth.token}`,"Content-Type":"application/json"},
+        body:JSON.stringify({
+          tipo:segTerritorio.tipo,
+          note:segTerritorio.note||null,
+          address:selectedSearchResult?.address||null,
+          lat:selectedSearchResult?.lat??null,
+          lng:selectedSearchResult?.lng??null,
+        }),
+      });
+      const d=await res.json();
+      if(d.ok){
+        setSegTerritorioMsg({ok:true,text:"Segnalazione inviata"});
+        setSegTerritorio({tipo:"",note:""});
+        setTimeout(()=>{setSegTerritorioMsg(null);setSelectedSearchResult(null);},2000);
+      } else {
+        setSegTerritorioMsg({ok:false,text:d.error||"Errore"});
+      }
+    }catch{setSegTerritorioMsg({ok:false,text:"Errore di rete"});}
+    setSegTerritorioSending(false);
+  },[segTerritorio,selectedSearchResult,auth.token]);
 
   const loadRoutes=useCallback(async()=>{
     try{
@@ -1281,6 +1315,61 @@ function GPSModule({onSelectVehicle,mode="live"}){
                   </div>
                 )}
               </div>
+
+              {/* ── Segnalazione territorio (visible after address picked) ── */}
+              {selectedSearchResult&&(
+                <div style={{background:T.card,border:`1px solid ${T.orange}44`,borderRadius:10,padding:"12px 13px",marginBottom:10,flexShrink:0}}>
+                  {/* header */}
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                    <div style={{display:"flex",alignItems:"center",gap:7}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.orange} strokeWidth="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      <span style={{fontSize:11,fontWeight:700,color:T.orange,textTransform:"uppercase",letterSpacing:0.8}}>Segnalazione</span>
+                    </div>
+                    <button onClick={()=>{setSelectedSearchResult(null);setSegTerritorio({tipo:"",note:""});setSegTerritorioMsg(null);}}
+                      style={{background:"transparent",border:"none",color:T.textDim,cursor:"pointer",fontSize:15,lineHeight:1,padding:2}}>×</button>
+                  </div>
+                  {/* address chip */}
+                  <div style={{fontSize:10,color:T.textDim,background:T.bg,borderRadius:6,padding:"5px 8px",marginBottom:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    📍 {selectedSearchResult.address}
+                  </div>
+                  {/* tipo bullets */}
+                  <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:10}}>
+                    {[
+                      {id:"mancata_raccolta", label:"Mancata raccolta", color:T.red},
+                      {id:"abbandono",        label:"Abbandoni",        color:T.orange},
+                      {id:"da_pulire",        label:"Da pulire",        color:T.yellow},
+                      {id:"altro",            label:"Altro",            color:T.textSub},
+                    ].map(opt=>{
+                      const active=segTerritorio.tipo===opt.id;
+                      return(
+                        <button key={opt.id} onClick={()=>setSegTerritorio(s=>({...s,tipo:opt.id,note:opt.id!=="altro"?"":s.note}))}
+                          style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:7,border:`1px solid ${active?opt.color+"88":T.border}`,background:active?opt.color+"18":T.bg,cursor:"pointer",textAlign:"left",fontFamily:T.font,transition:"all 0.12s"}}>
+                          <div style={{width:12,height:12,borderRadius:"50%",border:`2px solid ${active?opt.color:T.textDim}`,background:active?opt.color:"transparent",flexShrink:0,transition:"all 0.12s"}}/>
+                          <span style={{fontSize:12,color:active?opt.color:T.textSub,fontWeight:active?700:400}}>{opt.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* note field (always shown for "altro", optional otherwise) */}
+                  {segTerritorio.tipo&&(
+                    <textarea value={segTerritorio.note} onChange={e=>setSegTerritorio(s=>({...s,note:e.target.value}))}
+                      placeholder={segTerritorio.tipo==="altro"?"Descrivi il problema…":"Note aggiuntive (opzionale)…"}
+                      rows={2}
+                      style={{width:"100%",background:T.bg,border:`1px solid ${segTerritorio.tipo==="altro"&&!segTerritorio.note.trim()?T.red+"66":T.border}`,borderRadius:7,color:T.text,padding:"7px 9px",fontSize:11,fontFamily:T.font,outline:"none",resize:"vertical",boxSizing:"border-box",marginBottom:8}}/>
+                  )}
+                  {/* feedback */}
+                  {segTerritorioMsg&&(
+                    <div style={{fontSize:11,color:segTerritorioMsg.ok?T.green:T.red,marginBottom:8,padding:"5px 8px",background:segTerritorioMsg.ok?"#0a1a0a":"#1a0a0a",borderRadius:6,border:`1px solid ${segTerritorioMsg.ok?T.green+"44":T.red+"44"}`}}>
+                      {segTerritorioMsg.text}
+                    </div>
+                  )}
+                  <button onClick={submitSegTerritorio} disabled={segTerritorioSending||!segTerritorio.tipo}
+                    style={{width:"100%",padding:"8px",background:segTerritorio.tipo?T.navActive:T.bg,border:`1px solid ${segTerritorio.tipo?T.orange+"66":T.border}`,borderRadius:7,color:segTerritorio.tipo?T.orange:T.textDim,cursor:segTerritorio.tipo&&!segTerritorioSending?"pointer":"not-allowed",fontSize:12,fontFamily:T.font,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all 0.12s"}}>
+                    {segTerritorioSending&&<span style={{display:"inline-block",width:10,height:10,border:`2px solid ${T.orange}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>}
+                    {segTerritorioSending?"Invio…":"Invia segnalazione"}
+                  </button>
+                </div>
+              )}
 
               {/* filters */}
               <div style={{display:"flex",gap:6,marginBottom:8}}>

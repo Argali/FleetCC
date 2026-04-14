@@ -88,6 +88,17 @@ function useApi(path, { pollMs=0, skip=false }={}) {
   return {data,loading,error,refetch:fetch_};
 }
 
+// ─── MOBILE BREAKPOINT ────────────────────────────────────────────────────────
+function useIsMobile(){
+  const [mob,setMob]=useState(()=>window.innerWidth<768);
+  useEffect(()=>{
+    const h=()=>setMob(window.innerWidth<768);
+    window.addEventListener("resize",h);
+    return()=>window.removeEventListener("resize",h);
+  },[]);
+  return mob;
+}
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const statusLabel={active:"Attivo",idle:"Fermo",workshop:"Officina",waiting_parts:"Attesa Ricambi",in_progress:"In Corso",done:"Completato"};
 const statusColor={active:"#4ade80",idle:"#facc15",workshop:"#f87171",waiting_parts:"#fb923c",in_progress:"#60a5fa",done:"#6ee7b7"};
@@ -682,6 +693,7 @@ const EMPTY_CDR_META={name:"",comune:"",materiale:"",sector:"",address:"",lat:nu
 function GPSModule({onSelectVehicle,mode="live"}){
   const {auth}=useAuth();
   const {can}=usePerms();
+  const isMobile=useIsMobile();
   const {data:vehicles,loading,error,refetch}=useApi("/gps/vehicles",{pollMs:10000});
   const [routes,setRoutes]=useState(null);
   const [visibleRoutes,setVisibleRoutes]=useState({});
@@ -757,7 +769,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
   const [editingZone,setEditingZone]=useState(false);
   const [legendOpen,setLegendOpen]=useState({live:true,zone:true,punti:true});
   // GPS Live panel state
-  const [livePanelOpen,setLivePanelOpen]=useState(true);
+  const [livePanelOpen,setLivePanelOpen]=useState(!isMobile);
   const [filterComune,setFilterComune]=useState("");
   const [filterSettore,setFilterSettore]=useState("");
   const [searchAddr,setSearchAddr]=useState("");
@@ -1100,7 +1112,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
   const gpsTabs=ALL_GPS_TABS.filter(t=>t.modes.includes(mode));
 
   return(
-    <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 130px)",fontFamily:T.font}}>
+    <div style={{display:"flex",flexDirection:"column",height:isMobile?"calc(100dvh - 144px)":"calc(100vh - 130px)",fontFamily:T.font}}>
       <div style={{display:"flex",alignItems:"center",gap:0,flexShrink:0}}>
         <TabBar tabs={gpsTabs} active={tab} onChange={(t)=>{setTab(t);cancelEdit();cancelCdrEdit();}}/>
         <div style={{marginLeft:"auto",marginBottom:20,display:"flex",gap:8}}>
@@ -2439,13 +2451,14 @@ function CdrCanvas({shapes,onChange,activeColor,activeOpacity}){
 function WorkshopModule(){
   const {auth}=useAuth();
   const {can}=usePerms();
+  const isMobile=useIsMobile();
   const {data:orders,loading,error,refetch}=useApi("/workshop/orders");
   const canEdit=can("workshop","edit");
   if(loading)return<Spinner/>;if(error)return<ApiError error={error} onRetry={refetch}/>;
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:T.font}}>
       {!canEdit&&<div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 16px",fontSize:12,color:T.textSub}}>👁 Solo lettura — il tuo ruolo non permette modifiche</div>}
-      <div style={{display:"flex",gap:12}}>
+      <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:12}}>
         {["waiting_parts","in_progress","done"].map(col=>(
           <div key={col} style={{flex:1,background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:12,padding:14,boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
@@ -2542,7 +2555,7 @@ function SegnalazioniModule(){
       {showForm&&(
         <div style={{background:T.card,border:`1px solid ${T.green}33`,borderRadius:12,padding:22,display:"flex",flexDirection:"column",gap:16,boxShadow:"0 4px 12px rgba(0,0,0,0.2)"}}>
           <div style={{fontSize:15,fontWeight:700,color:T.text}}>Nuova segnalazione</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16}}>
             <div><label style={lbl}>Nome segnalante</label><input value={form.reporter_name} onChange={e=>set("reporter_name")(e.target.value)} style={inp}/></div>
             <div><label style={lbl}>Settore</label><input value={form.settore} onChange={e=>set("settore")(e.target.value)} style={inp} placeholder="Es. Zona Nord…"/></div>
           </div>
@@ -2683,17 +2696,19 @@ function FuelModule(){
         ))}
       </div>
       <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:12,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
+        <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
           <thead><tr style={{background:T.bg}}>{["Data","Veicolo","Litri","Costo","KM","Stazione"].map(h=><th key={h} style={{padding:"12px 16px",textAlign:"left",color:T.textSub,fontWeight:600,fontSize:11,textTransform:"uppercase",letterSpacing:0.5}}>{h}</th>)}</tr></thead>
           <tbody>{entries.map((e)=><tr key={`${e.date}-${e.vehicle}-${e.km}`} style={{borderTop:`1px solid ${T.border}`}}>
-            <td style={{padding:"12px 16px",color:T.textSub,fontFamily:T.mono,fontSize:12}}>{e.date}</td>
-            <td style={{padding:"12px 16px",color:T.text,fontWeight:500}}>{e.vehicle}</td>
+            <td style={{padding:"12px 16px",color:T.textSub,fontFamily:T.mono,fontSize:12,whiteSpace:"nowrap"}}>{e.date}</td>
+            <td style={{padding:"12px 16px",color:T.text,fontWeight:500,whiteSpace:"nowrap"}}>{e.vehicle}</td>
             <td style={{padding:"12px 16px",color:T.green,fontFamily:T.mono}}>{e.liters} L</td>
             <td style={{padding:"12px 16px",color:T.green,fontFamily:T.mono}}>€{e.cost_eur}</td>
             <td style={{padding:"12px 16px",color:T.text+"88",fontFamily:T.mono}}>{e.km}</td>
-            <td style={{padding:"12px 16px",color:T.textSub}}>{e.station}</td>
+            <td style={{padding:"12px 16px",color:T.textSub,whiteSpace:"nowrap"}}>{e.station}</td>
           </tr>)}</tbody>
         </table>
+        </div>
       </div>
     </div>
   );
@@ -2710,7 +2725,7 @@ function SuppliersModule(){
     <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:T.font}}>
       <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cerca fornitore o categoria..."
         style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"11px 16px",color:T.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box"}}/>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:10}}>
         {filtered.map(s=>(
           <div key={s.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:12,padding:"16px 18px",boxShadow:"0 1px 4px rgba(0,0,0,0.12)"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
@@ -2805,6 +2820,7 @@ function CruscottoModule({onSelectVehicle}){
       <div>
         <div style={{fontSize:11,color:T.textSub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:12,fontWeight:600}}>Dettaglio per veicolo</div>
         <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:12,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
+          <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
             <thead>
               <tr style={{background:T.bg}}>
@@ -2831,17 +2847,19 @@ function CruscottoModule({onSelectVehicle}){
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
       {can("costs")&&costs&&(
         <div>
           <div style={{fontSize:11,color:T.textSub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:12,fontWeight:600}}>Costi mensili</div>
           <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:12,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
+            <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-              <thead><tr style={{background:T.bg}}>{["Mese","Carburante","Manutenzione","Altro","Totale"].map(h=><th key={h} style={{padding:"12px 16px",textAlign:h==="Mese"?"left":"right",color:T.textSub,fontWeight:600,fontSize:11,textTransform:"uppercase",letterSpacing:0.5}}>{h}</th>)}</tr></thead>
+              <thead><tr style={{background:T.bg}}>{["Mese","Carburante","Manutenzione","Altro","Totale"].map(h=><th key={h} style={{padding:"12px 16px",textAlign:h==="Mese"?"left":"right",color:T.textSub,fontWeight:600,fontSize:11,textTransform:"uppercase",letterSpacing:0.5,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
               <tbody>{costs.map(c=>(
                 <tr key={c.month} style={{borderTop:`1px solid ${T.border}`}}>
-                  <td style={{padding:"12px 16px",color:T.textSub,fontFamily:T.mono}}>{c.month}</td>
+                  <td style={{padding:"12px 16px",color:T.textSub,fontFamily:T.mono,whiteSpace:"nowrap"}}>{c.month}</td>
                   <td style={{padding:"12px 16px",textAlign:"right",color:T.green,fontFamily:T.mono}}>€{c.fuel}</td>
                   <td style={{padding:"12px 16px",textAlign:"right",color:T.blue,fontFamily:T.mono}}>€{c.maintenance}</td>
                   <td style={{padding:"12px 16px",textAlign:"right",color:T.yellow,fontFamily:T.mono}}>€{c.other}</td>
@@ -2849,6 +2867,7 @@ function CruscottoModule({onSelectVehicle}){
                 </tr>
               ))}</tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -3664,6 +3683,7 @@ const NAV_DEF=[
 function Dashboard(){
   const {auth,logout}=useAuth();
   const {can}=usePerms();
+  const isMobile=useIsMobile();
   const [active,setActive]=useState("home");
   const [selectedVehicle,setSelectedVehicle]=useState(null);
   const [sidebarOpen,setSidebarOpen]=useState(true);
@@ -3728,6 +3748,50 @@ function Dashboard(){
   const W=sidebarOpen?210:60;
   const currentNav=nav.find(n=>n.id===active);
 
+  // ── MOBILE LAYOUT ──────────────────────────────────────────────────────────
+  if(isMobile){
+    return(
+      <div style={{display:"flex",flexDirection:"column",height:"100dvh",background:T.bg,fontFamily:T.font,color:T.text,overflow:"hidden"}}>
+        {/* Mobile top header */}
+        <div style={{background:T.sidebar,borderBottom:`1px solid ${T.border}`,padding:"0 16px",height:52,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,zIndex:100}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <FleetLogo size={26}/>
+            <div style={{fontSize:14,fontWeight:800,color:T.text,letterSpacing:-0.3}}>Fleet<span style={{color:T.green}}>CC</span></div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {currentNav&&<span style={{fontSize:13,fontWeight:600,color:T.textSub}}>{selectedVehicle?selectedVehicle.name:currentNav.label}</span>}
+            <div style={{width:30,height:30,borderRadius:"50%",background:`linear-gradient(135deg,${T.blue},${T.green})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#000",flexShrink:0}}>
+              {auth.user.name.charAt(0).toUpperCase()}
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div style={{flex:1,overflowY:"auto",padding:"16px",paddingBottom:72,background:T.bg}}>
+          {renderModule()}
+        </div>
+
+        {/* Mobile bottom tab bar */}
+        <div style={{position:"fixed",bottom:0,left:0,right:0,height:60,background:T.sidebar,borderTop:`1px solid ${T.border}`,display:"flex",alignItems:"stretch",zIndex:200,paddingBottom:"env(safe-area-inset-bottom)"}}>
+          {nav.filter(n=>n.id!=="editors").map(n=>{
+            const isActive=active===n.id;
+            return(
+              <button key={n.id} onClick={()=>handleSetActive(n.id)}
+                style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,border:"none",background:"transparent",color:isActive?T.blue:T.textDim,cursor:"pointer",fontFamily:T.font,padding:"4px 2px",position:"relative"}}>
+                {isActive&&<div style={{position:"absolute",top:0,left:"25%",right:"25%",height:2,background:T.blue,borderRadius:"0 0 2px 2px"}}/>}
+                <Icon d={n.icon} size={18}/>
+                <span style={{fontSize:9,fontWeight:isActive?700:400,letterSpacing:0.2,whiteSpace:"nowrap"}}>{n.short}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {showBugModal&&<BugReportModal auth={auth} onClose={()=>setShowBugModal(false)}/>}
+      </div>
+    );
+  }
+
+  // ── DESKTOP LAYOUT ─────────────────────────────────────────────────────────
   return(
     <div style={{display:"flex",height:"100vh",background:T.bg,fontFamily:T.font,color:T.text,overflow:"hidden"}}>
       {/* ── SIDEBAR ── */}

@@ -3707,15 +3707,15 @@ function drawStamp(canvas, ctx, stamp) {
     datetime,
   ].filter(Boolean);
 
-  const PAD = 14;
-  const LINE_H = 20;
-  const FONT_SIZE = 15;
+  const PAD = 42;
+  const LINE_H = 60;
+  const FONT_SIZE = 45;
   ctx.font = `bold ${FONT_SIZE}px 'JetBrains Mono', Consolas, monospace`;
 
   const maxW = Math.max(...lines.map(l => ctx.measureText(l).width));
   const boxW = maxW + PAD * 2;
   const boxH = lines.length * LINE_H + PAD * 1.5;
-  const x = 16;
+  const x = 48;
   const y = canvas.height - boxH - 16;
 
   // Semi-transparent dark background
@@ -3741,7 +3741,7 @@ function drawStamp(canvas, ctx, stamp) {
   ctx.save();
   ctx.globalAlpha = 0.9;
   ctx.fillStyle = "#4ade80";
-  ctx.fillRect(x, y + 6, 3, boxH - 12);
+  ctx.fillRect(x, y + 18, 9, boxH - 36);
   ctx.restore();
 
   // Text lines
@@ -3752,14 +3752,14 @@ function drawStamp(canvas, ctx, stamp) {
     ctx.globalAlpha = 0.6;
     ctx.fillStyle = "#000";
     ctx.font = `${i === 0 ? "bold" : "normal"} ${FONT_SIZE}px 'JetBrains Mono', Consolas, monospace`;
-    ctx.fillText(line, x + PAD + 7 + 1, ty + 1);
+    ctx.fillText(line, x + PAD + 21 + 3, ty + 3);
     ctx.restore();
     // Text
     ctx.save();
     ctx.globalAlpha = 1;
     ctx.fillStyle = i === 0 ? "#4ade80" : i === lines.length - 1 ? "#60a5fa" : "#e2eaf5";
     ctx.font = `${i === 0 ? "bold" : "normal"} ${FONT_SIZE}px 'JetBrains Mono', Consolas, monospace`;
-    ctx.fillText(line, x + PAD + 7, ty);
+    ctx.fillText(line, x + PAD + 21, ty);
     ctx.restore();
   });
 }

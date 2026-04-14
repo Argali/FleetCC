@@ -720,6 +720,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
   const [sharing,setSharing]=useState(false);
   const [driverLocs,setDriverLocs]=useState([]);
   const centeredRef=useRef(false); // auto-center only once
+  const [showCamera,setShowCamera]=useState(false);
   const {data:vehicles,loading,error,refetch}=useApi("/gps/vehicles",{pollMs:10000});
   const [routes,setRoutes]=useState(null);
   const [visibleRoutes,setVisibleRoutes]=useState({});
@@ -1446,7 +1447,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
           {tab==="live"&&(
             <div style={{position:"absolute",bottom:10,left:10,zIndex:1000,display:"flex",flexDirection:"column",gap:6,alignItems:"flex-start"}}>
               {/* Geolocation controls */}
-              <div style={{display:"flex",gap:6}}>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {myPos&&(
                   <button onClick={()=>liveMapRef.current?.flyTo(myPos,17)}
                     style={{background:"rgba(13,27,42,0.9)",border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
@@ -1458,6 +1459,11 @@ function GPSModule({onSelectVehicle,mode="live"}){
                   style={{background:sharing?"rgba(74,222,128,0.15)":"rgba(13,27,42,0.9)",border:`1px solid ${sharing?T.green+"88":T.border}`,borderRadius:8,color:sharing?T.green:T.textSub,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill={sharing?"currentColor":"none"} stroke="currentColor" strokeWidth="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>
                   {sharing?"Condivisione attiva":"Condividi posizione"}
+                </button>
+                <button onClick={()=>setShowCamera(true)}
+                  style={{background:"rgba(13,27,42,0.9)",border:`1px solid ${T.yellow}55`,borderRadius:8,color:T.yellow,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  Foto timbrata
                 </button>
               </div>
               {geoError&&<div style={{fontSize:10,color:T.red,background:"rgba(13,27,42,0.9)",padding:"4px 10px",borderRadius:6,backdropFilter:"blur(6px)"}}>{geoError}</div>}
@@ -2210,6 +2216,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
           </div>
         </div>
       )}
+      {showCamera&&<StampedCamera position={myPos} onClose={()=>setShowCamera(false)}/>}
     </div>
   );
 }
@@ -3664,6 +3671,232 @@ function HomeModule({onSelectVehicle}){
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── STAMPED CAMERA ───────────────────────────────────────────────────────────
+const APP_VERSION = "0.1.0";
+
+async function reverseGeocode(lat, lng) {
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=18&addressdetails=1`,
+      { headers: { "User-Agent": "FleetCC/1.0" }, signal: AbortSignal.timeout(6000) }
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    const a = d.address || {};
+    const parts = [
+      a.road || a.pedestrian || a.path,
+      a.house_number,
+      a.town || a.city || a.village || a.municipality,
+    ].filter(Boolean);
+    return parts.length ? parts.join(" ") : d.display_name?.split(",")[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+function drawStamp(canvas, ctx, stamp) {
+  const { address, coords, version, datetime } = stamp;
+  const lines = [
+    `FleetCC v${version}`,
+    address || "",
+    coords,
+    datetime,
+  ].filter(Boolean);
+
+  const PAD = 14;
+  const LINE_H = 20;
+  const FONT_SIZE = 15;
+  ctx.font = `bold ${FONT_SIZE}px 'JetBrains Mono', Consolas, monospace`;
+
+  const maxW = Math.max(...lines.map(l => ctx.measureText(l).width));
+  const boxW = maxW + PAD * 2;
+  const boxH = lines.length * LINE_H + PAD * 1.5;
+  const x = 16;
+  const y = canvas.height - boxH - 16;
+
+  // Semi-transparent dark background
+  ctx.save();
+  ctx.globalAlpha = 0.72;
+  ctx.fillStyle = "#0a1628";
+  const r = 8;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + boxW - r, y);
+  ctx.quadraticCurveTo(x + boxW, y, x + boxW, y + r);
+  ctx.lineTo(x + boxW, y + boxH - r);
+  ctx.quadraticCurveTo(x + boxW, y + boxH, x + boxW - r, y + boxH);
+  ctx.lineTo(x + r, y + boxH);
+  ctx.quadraticCurveTo(x, y + boxH, x, y + boxH - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Left accent bar
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = "#4ade80";
+  ctx.fillRect(x, y + 6, 3, boxH - 12);
+  ctx.restore();
+
+  // Text lines
+  lines.forEach((line, i) => {
+    const ty = y + PAD + i * LINE_H;
+    // Shadow
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = "#000";
+    ctx.font = `${i === 0 ? "bold" : "normal"} ${FONT_SIZE}px 'JetBrains Mono', Consolas, monospace`;
+    ctx.fillText(line, x + PAD + 7 + 1, ty + 1);
+    ctx.restore();
+    // Text
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = i === 0 ? "#4ade80" : i === lines.length - 1 ? "#60a5fa" : "#e2eaf5";
+    ctx.font = `${i === 0 ? "bold" : "normal"} ${FONT_SIZE}px 'JetBrains Mono', Consolas, monospace`;
+    ctx.fillText(line, x + PAD + 7, ty);
+    ctx.restore();
+  });
+}
+
+function StampedCamera({ position, onClose }) {
+  const fileRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [stamped, setStamped] = useState(null);   // data URL of final image
+  const [address, setAddress] = useState(null);
+  const [addrLoading, setAddrLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+
+  // Reverse geocode once on open
+  useEffect(() => {
+    if (!position) return;
+    setAddrLoading(true);
+    reverseGeocode(position[0], position[1])
+      .then(a => setAddress(a))
+      .finally(() => setAddrLoading(false));
+  }, [position]);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProcessing(true);
+    setStamped(null);
+
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = canvasRef.current;
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+
+      const now = new Date();
+      const dd = String(now.getDate()).padStart(2, "0");
+      const mm = String(now.getMonth() + 1).padStart(2, "0");
+      const yy = String(now.getFullYear()).slice(2);
+      const hh = String(now.getHours()).padStart(2, "0");
+      const min = String(now.getMinutes()).padStart(2, "0");
+
+      drawStamp(canvas, ctx, {
+        version: APP_VERSION,
+        address: address,
+        coords: position
+          ? `${position[0].toFixed(5)}, ${position[1].toFixed(5)}`
+          : "Posizione non disponibile",
+        datetime: `${dd}/${mm}/${yy} - ${hh}:${min}`,
+      });
+
+      setStamped(canvas.toDataURL("image/jpeg", 0.92));
+      URL.revokeObjectURL(url);
+      setProcessing(false);
+    };
+    img.onerror = () => { setProcessing(false); URL.revokeObjectURL(url); };
+    img.src = url;
+  };
+
+  const download = () => {
+    if (!stamped) return;
+    const now = new Date();
+    const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}_${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}`;
+    const a = document.createElement("a");
+    a.href = stamped;
+    a.download = `fleetcc_${ts}.jpg`;
+    a.click();
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:2000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16,fontFamily:T.font}}>
+      {/* hidden canvas for compositing */}
+      <canvas ref={canvasRef} style={{display:"none"}}/>
+
+      <div style={{width:"100%",maxWidth:480,background:T.card,borderRadius:16,border:`1px solid ${T.cardBorder}`,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.6)"}}>
+        {/* Header */}
+        <div style={{padding:"14px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.green} strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <span style={{fontSize:14,fontWeight:700,color:T.text}}>Foto con timbro</span>
+          </div>
+          <button onClick={onClose} style={{background:"transparent",border:"none",color:T.textSub,cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}>×</button>
+        </div>
+
+        <div style={{padding:18,display:"flex",flexDirection:"column",gap:14}}>
+          {/* GPS info */}
+          <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px"}}>
+            <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:6,fontWeight:700}}>Dati timbro</div>
+            <div style={{fontSize:12,color:T.text,fontFamily:T.mono,display:"flex",flexDirection:"column",gap:3}}>
+              <span style={{color:T.green,fontWeight:700}}>FleetCC v{APP_VERSION}</span>
+              {addrLoading
+                ? <span style={{color:T.textDim}}>Ricerca indirizzo…</span>
+                : <span style={{color:T.textSub}}>{address||"Indirizzo non disponibile"}</span>
+              }
+              {position
+                ? <span style={{color:T.textSub}}>{position[0].toFixed(5)}, {position[1].toFixed(5)}</span>
+                : <span style={{color:T.red}}>Posizione GPS non disponibile</span>
+              }
+              <span style={{color:T.blue}}>
+                {(() => {
+                  const n = new Date();
+                  return `${String(n.getDate()).padStart(2,"0")}/${String(n.getMonth()+1).padStart(2,"0")}/${String(n.getFullYear()).slice(2)} - ${String(n.getHours()).padStart(2,"0")}:${String(n.getMinutes()).padStart(2,"0")}`;
+                })()}
+              </span>
+            </div>
+          </div>
+
+          {!stamped ? (
+            <button onClick={() => fileRef.current.click()} disabled={processing}
+              style={{padding:"14px",background:T.navActive,border:`1px solid ${T.green}55`,borderRadius:12,color:T.green,cursor:processing?"not-allowed":"pointer",fontSize:15,fontFamily:T.font,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+              {processing
+                ? <><span style={{display:"inline-block",width:16,height:16,border:`2px solid ${T.green}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>Elaborazione…</>
+                : <><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Scatta foto</>
+              }
+            </button>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <img src={stamped} alt="Anteprima" style={{width:"100%",borderRadius:10,border:`1px solid ${T.border}`,display:"block"}}/>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={download}
+                  style={{flex:1,padding:"11px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:10,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Salva foto
+                </button>
+                <button onClick={() => { setStamped(null); fileRef.current.value = ""; }}
+                  style={{padding:"11px 16px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:10,color:T.textSub,cursor:"pointer",fontSize:13,fontFamily:T.font}}>
+                  Ritenta
+                </button>
+              </div>
+            </div>
+          )}
+
+          <input ref={fileRef} type="file" accept="image/*" capture="environment"
+            onChange={handleFile} style={{display:"none"}}/>
+        </div>
+      </div>
     </div>
   );
 }

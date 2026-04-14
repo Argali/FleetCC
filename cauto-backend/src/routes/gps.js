@@ -4,8 +4,18 @@ const ExcelJS = require("exceljs");
 const adapter = require("../adapters");
 const { requireAuth, requirePerm } = require("../middleware/auth");
 
+const path   = require("path");
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+const photoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, path.join(__dirname, "../../uploads")),
+  filename:    (_req, _file, cb) => {
+    const name = `gps_photo_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+    cb(null, name);
+  },
+});
+const photoUpload = multer({ storage: photoStorage, limits: { fileSize: 15 * 1024 * 1024 } });
 
 // In-memory driver location store (keyed by user ID, TTL 5 min)
 const driverLocations = new Map();
@@ -262,6 +272,12 @@ router.post("/routes/snap-to-roads", requireAuth, async (req, res) => {
     console.error("snap-to-roads error:", err);
     return res.status(500).json({ ok: false, error: "Errore durante lo snap-to-roads. Riprova o controlla i waypoint." });
   }
+});
+
+// ── Stamped photo upload ──────────────────────────────────────────────────────
+router.post("/photo", requireAuth, photoUpload.single("photo"), (req, res) => {
+  if (!req.file) return res.status(400).json({ ok: false, error: "Nessuna foto ricevuta" });
+  res.status(201).json({ ok: true, url: `/uploads/${req.file.filename}` });
 });
 
 // ── Driver geolocation ────────────────────────────────────────────────────────

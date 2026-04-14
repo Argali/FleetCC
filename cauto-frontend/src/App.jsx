@@ -721,6 +721,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
   const [driverLocs,setDriverLocs]=useState([]);
   const centeredRef=useRef(false); // auto-center only once
   const [showCamera,setShowCamera]=useState(false);
+  const [showMobileTabPicker,setShowMobileTabPicker]=useState(false);
   const {data:vehicles,loading,error,refetch}=useApi("/gps/vehicles",{pollMs:10000});
   const [routes,setRoutes]=useState(null);
   const [visibleRoutes,setVisibleRoutes]=useState({});
@@ -1210,9 +1211,12 @@ function GPSModule({onSelectVehicle,mode="live"}){
   ];
   const gpsTabs=ALL_GPS_TABS.filter(t=>t.modes.includes(mode));
 
+  // On mobile + live tab: fullscreen map (only bottom app tab bar eats space)
+  const mobileFullscreen = isMobile && tab === "live";
+
   return(
-    <div style={{display:"flex",flexDirection:"column",height:isMobile?"calc(100dvh - 144px)":"calc(100vh - 130px)",fontFamily:T.font}}>
-      <div style={{display:"flex",alignItems:"center",gap:0,flexShrink:0}}>
+    <div style={{display:"flex",flexDirection:"column",height:mobileFullscreen?"calc(100dvh - 60px)":isMobile?"calc(100dvh - 144px)":"calc(100vh - 130px)",fontFamily:T.font}}>
+      <div style={{display:mobileFullscreen?"none":"flex",alignItems:"center",gap:0,flexShrink:0}}>
         <TabBar tabs={gpsTabs} active={tab} onChange={(t)=>{setTab(t);cancelEdit();cancelCdrEdit();}}/>
         <div style={{marginLeft:"auto",marginBottom:20,display:"flex",gap:8}}>
           {tab==="editor"&&canEdit&&!editingId&&(
@@ -1282,8 +1286,8 @@ function GPSModule({onSelectVehicle,mode="live"}){
 
       <div style={{display:"flex",gap:16,flex:1,minHeight:0}}>
 
-        {/* ── GPS Live: collapsible left vehicle panel ── */}
-        {tab==="live"&&(
+        {/* ── GPS Live: collapsible left vehicle panel (hidden on mobile fullscreen) ── */}
+        {tab==="live"&&!mobileFullscreen&&(
           <div style={{display:"flex",flexDirection:"column",flexShrink:0,transition:"width 0.2s ease",width:livePanelOpen?260:40,overflow:"hidden"}}>
             {/* toggle tab */}
             <div onClick={()=>setLivePanelOpen(o=>!o)}
@@ -1533,9 +1537,9 @@ function GPSModule({onSelectVehicle,mode="live"}){
               </div>}
             </div>
           )}
-          {tab==="live"&&(
+          {tab==="live"&&!mobileFullscreen&&(
             <div style={{position:"absolute",bottom:10,left:10,zIndex:1000,display:"flex",flexDirection:"column",gap:6,alignItems:"flex-start"}}>
-              {/* Geolocation controls */}
+              {/* Geolocation controls — desktop */}
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {myPos&&(
                   <button onClick={()=>liveMapRef.current?.flyTo(myPos,17)}
@@ -1559,8 +1563,57 @@ function GPSModule({onSelectVehicle,mode="live"}){
               <div style={{fontSize:10,color:T.textSub,fontFamily:T.mono,background:"rgba(13,27,42,0.85)",padding:"4px 10px",borderRadius:6}}>Aggiornamento ogni 10s · Visirun mock</div>
             </div>
           )}
-          {/* ── PDF Export button ── */}
-          {(tab==="live"||tab==="editor"||tab==="zone"||tab==="punti")&&(
+
+          {/* ── Mobile fullscreen live: glove-friendly FABs ── */}
+          {mobileFullscreen&&(
+            <>
+              {/* Top-left: GPS tab menu button */}
+              <button onClick={()=>setShowMobileTabPicker(o=>!o)}
+                style={{position:"absolute",top:12,left:12,zIndex:1001,width:44,height:44,borderRadius:12,background:"rgba(13,27,42,0.88)",border:`1px solid ${T.border}`,color:T.textSub,fontSize:20,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",backdropFilter:"blur(8px)"}}>
+                ☰
+              </button>
+              {showMobileTabPicker&&(
+                <div style={{position:"absolute",top:62,left:12,zIndex:1002,background:"rgba(13,27,42,0.96)",border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,0.5)",backdropFilter:"blur(12px)"}}>
+                  {gpsTabs.map(t=>(
+                    <button key={t.id} onClick={()=>{setTab(t.id);cancelEdit();cancelCdrEdit();setShowMobileTabPicker(false);}}
+                      style={{display:"block",width:"100%",padding:"13px 20px",background:tab===t.id?T.navActive:"transparent",border:"none",borderBottom:`1px solid ${T.border}`,color:tab===t.id?T.blue:T.text,textAlign:"left",cursor:"pointer",fontSize:14,fontFamily:T.font,fontWeight:tab===t.id?700:400}}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Right-side FABs: bottom-right, stacked vertically */}
+              <div style={{position:"absolute",bottom:20,right:16,zIndex:1001,display:"flex",flexDirection:"column",gap:14,alignItems:"center"}}>
+                {/* Centre on me */}
+                {myPos&&(
+                  <button onClick={()=>liveMapRef.current?.flyTo(myPos,17)}
+                    style={{width:64,height:64,borderRadius:18,background:"rgba(13,27,42,0.92)",border:`2px solid ${T.blue}88`,color:T.blue,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                    <span style={{fontSize:9,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>CENTRA</span>
+                  </button>
+                )}
+                {/* Share location */}
+                <button onClick={toggleSharing}
+                  style={{width:64,height:64,borderRadius:18,background:sharing?"rgba(74,222,128,0.18)":"rgba(13,27,42,0.92)",border:`2px solid ${sharing?T.green:T.border}`,color:sharing?T.green:T.textSub,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)",transition:"background 0.2s, border-color 0.2s, color 0.2s"}}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill={sharing?"currentColor":"none"} stroke="currentColor" strokeWidth="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>
+                  <span style={{fontSize:9,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>{sharing?"ATTIVO":"GPS"}</span>
+                </button>
+                {/* Camera */}
+                <button onClick={()=>setShowCamera(true)}
+                  style={{width:64,height:64,borderRadius:18,background:"rgba(13,27,42,0.92)",border:`2px solid ${T.yellow}88`,color:T.yellow,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  <span style={{fontSize:9,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>FOTO</span>
+                </button>
+              </div>
+              {geoError&&(
+                <div style={{position:"absolute",bottom:20,left:12,zIndex:1001,fontSize:11,color:T.red,background:"rgba(13,27,42,0.9)",padding:"6px 12px",borderRadius:8,backdropFilter:"blur(6px)",maxWidth:"calc(100% - 100px)"}}>
+                  {geoError}
+                </div>
+              )}
+            </>
+          )}
+          {/* ── PDF Export button (hidden on mobile fullscreen) ── */}
+          {(tab==="live"||tab==="editor"||tab==="zone"||tab==="punti")&&!mobileFullscreen&&(
             <button onClick={()=>setPdfPanel(p=>!p)}
               style={{position:"absolute",bottom:10,right:10,zIndex:1001,background:"rgba(13,27,42,0.9)",border:`1px solid ${T.border}`,borderRadius:8,color:T.textSub,padding:"6px 12px",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,backdropFilter:"blur(6px)"}}>
               📄 PDF
@@ -2305,7 +2358,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
           </div>
         </div>
       )}
-      {showCamera&&<StampedCamera position={myPos} onClose={()=>setShowCamera(false)}/>}
+      {showCamera&&<LiveCamera position={myPos} auth={auth} onClose={()=>setShowCamera(false)}/>}
     </div>
   );
 }
@@ -3853,139 +3906,207 @@ function drawStamp(canvas, ctx, stamp) {
   });
 }
 
-function StampedCamera({ position, onClose }) {
-  const fileRef = useRef(null);
-  const canvasRef = useRef(null);
-  const [stamped, setStamped] = useState(null);   // data URL of final image
+function LiveCamera({ position, auth, onClose }) {
+  const videoRef   = useRef(null);
+  const canvasRef  = useRef(null);
+  const fileRef    = useRef(null);
+  const streamRef  = useRef(null);
+  // "starting" | "viewfinder" | "capturing" | "uploading" | "done" | "error" | "fallback"
+  const [status, setStatus]   = useState("starting");
+  const [errMsg, setErrMsg]   = useState("");
   const [address, setAddress] = useState(null);
-  const [addrLoading, setAddrLoading] = useState(false);
-  const [processing, setProcessing] = useState(false);
 
-  // Reverse geocode once on open
+  // Reverse-geocode once on mount
   useEffect(() => {
-    if (!position) return;
-    setAddrLoading(true);
-    reverseGeocode(position[0], position[1])
-      .then(a => setAddress(a))
-      .finally(() => setAddrLoading(false));
-  }, [position]);
+    if (position) reverseGeocode(position[0], position[1]).then(a => setAddress(a));
+  }, []); // eslint-disable-line
 
-  const handleFile = async (e) => {
+  // Start camera on mount, stop on unmount
+  useEffect(() => {
+    let cancelled = false;
+    async function startCamera() {
+      if (!navigator.mediaDevices?.getUserMedia) { setStatus("fallback"); return; }
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false,
+        });
+        if (cancelled) { s.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = s;
+        if (videoRef.current) { videoRef.current.srcObject = s; }
+        setStatus("viewfinder");
+      } catch {
+        if (!cancelled) setStatus("fallback");
+      }
+    }
+    startCamera();
+    return () => {
+      cancelled = true;
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    };
+  }, []); // eslint-disable-line
+
+  function buildStampData() {
+    const now = new Date();
+    const dd  = String(now.getDate()).padStart(2,"0");
+    const mm  = String(now.getMonth()+1).padStart(2,"0");
+    const yy  = String(now.getFullYear()).slice(2);
+    const hh  = String(now.getHours()).padStart(2,"0");
+    const min = String(now.getMinutes()).padStart(2,"0");
+    return {
+      version:  APP_VERSION,
+      address,
+      coords:   position ? `${position[0].toFixed(5)}, ${position[1].toFixed(5)}` : "Posizione non disponibile",
+      datetime: `${dd}/${mm}/${yy} - ${hh}:${min}`,
+    };
+  }
+
+  async function uploadBlob(blob) {
+    const fd = new FormData();
+    fd.append("photo", blob, "photo.jpg");
+    const r = await fetch(`${API}/gps/photo`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${auth.token}` },
+      body: fd,
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || "Upload fallito");
+  }
+
+  async function captureAndUpload() {
+    const canvas = canvasRef.current;
+    const video  = videoRef.current;
+    if (!canvas || !video) return;
+    setStatus("capturing");
+    canvas.width  = video.videoWidth  || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    drawStamp(canvas, ctx, buildStampData());
+    setStatus("uploading");
+    try {
+      await new Promise((resolve, reject) =>
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas vuoto")), "image/jpeg", 0.92)
+      ).then(blob => uploadBlob(blob));
+      setStatus("done");
+      setTimeout(onClose, 1400);
+    } catch (e) {
+      setErrMsg(e.message || "Errore upload");
+      setStatus("error");
+    }
+  }
+
+  async function handleFallbackFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setProcessing(true);
-    setStamped(null);
-
+    setStatus("uploading");
     const img = new Image();
     const url = URL.createObjectURL(file);
-    img.onload = () => {
+    img.onload = async () => {
       const canvas = canvasRef.current;
-      canvas.width = img.naturalWidth;
+      canvas.width  = img.naturalWidth;
       canvas.height = img.naturalHeight;
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, 0, 0);
-
-      const now = new Date();
-      const dd = String(now.getDate()).padStart(2, "0");
-      const mm = String(now.getMonth() + 1).padStart(2, "0");
-      const yy = String(now.getFullYear()).slice(2);
-      const hh = String(now.getHours()).padStart(2, "0");
-      const min = String(now.getMinutes()).padStart(2, "0");
-
-      drawStamp(canvas, ctx, {
-        version: APP_VERSION,
-        address: address,
-        coords: position
-          ? `${position[0].toFixed(5)}, ${position[1].toFixed(5)}`
-          : "Posizione non disponibile",
-        datetime: `${dd}/${mm}/${yy} - ${hh}:${min}`,
-      });
-
-      setStamped(canvas.toDataURL("image/jpeg", 0.92));
+      drawStamp(canvas, ctx, buildStampData());
       URL.revokeObjectURL(url);
-      setProcessing(false);
+      try {
+        await new Promise((resolve, reject) =>
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas vuoto")), "image/jpeg", 0.92)
+        ).then(blob => uploadBlob(blob));
+        setStatus("done");
+        setTimeout(onClose, 1400);
+      } catch (err) {
+        setErrMsg(err.message || "Errore upload");
+        setStatus("error");
+      }
     };
-    img.onerror = () => { setProcessing(false); URL.revokeObjectURL(url); };
+    img.onerror = () => { URL.revokeObjectURL(url); setErrMsg("Impossibile leggere la foto"); setStatus("error"); };
     img.src = url;
-  };
+  }
 
-  const download = () => {
-    if (!stamped) return;
-    const now = new Date();
-    const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}_${String(now.getHours()).padStart(2,"0")}${String(now.getMinutes()).padStart(2,"0")}`;
-    const a = document.createElement("a");
-    a.href = stamped;
-    a.download = `fleetcc_${ts}.jpg`;
-    a.click();
-  };
+  const isBusy = status === "capturing" || status === "uploading";
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:2000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16,fontFamily:T.font}}>
-      {/* hidden canvas for compositing */}
+    <div style={{position:"fixed",inset:0,background:"#000",zIndex:2000,display:"flex",flexDirection:"column",fontFamily:T.font}}>
       <canvas ref={canvasRef} style={{display:"none"}}/>
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFallbackFile} style={{display:"none"}}/>
 
-      <div style={{width:"100%",maxWidth:480,background:T.card,borderRadius:16,border:`1px solid ${T.cardBorder}`,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.6)"}}>
-        {/* Header */}
-        <div style={{padding:"14px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.green} strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-            <span style={{fontSize:14,fontWeight:700,color:T.text}}>Foto con timbro</span>
-          </div>
-          <button onClick={onClose} style={{background:"transparent",border:"none",color:T.textSub,cursor:"pointer",fontSize:20,lineHeight:1,padding:4}}>×</button>
+      {/* Live viewfinder */}
+      {(status === "viewfinder" || status === "capturing" || status === "uploading") && (
+        <video ref={videoRef} autoPlay playsInline muted
+          style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity: isBusy ? 0.5 : 1,transition:"opacity 0.2s"}}/>
+      )}
+
+      {/* Starting spinner */}
+      {status === "starting" && (
+        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:14}}>
+          <div style={{width:36,height:36,border:`3px solid ${T.green}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
+          <span style={{color:T.textSub,fontSize:13}}>Apertura fotocamera…</span>
         </div>
+      )}
 
-        <div style={{padding:18,display:"flex",flexDirection:"column",gap:14}}>
-          {/* GPS info */}
-          <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px"}}>
-            <div style={{fontSize:10,color:T.textSub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:6,fontWeight:700}}>Dati timbro</div>
-            <div style={{fontSize:12,color:T.text,fontFamily:T.mono,display:"flex",flexDirection:"column",gap:3}}>
-              <span style={{color:T.green,fontWeight:700}}>FleetCC v{APP_VERSION}</span>
-              {addrLoading
-                ? <span style={{color:T.textDim}}>Ricerca indirizzo…</span>
-                : <span style={{color:T.textSub}}>{address||"Indirizzo non disponibile"}</span>
-              }
-              {position
-                ? <span style={{color:T.textSub}}>{position[0].toFixed(5)}, {position[1].toFixed(5)}</span>
-                : <span style={{color:T.red}}>Posizione GPS non disponibile</span>
-              }
-              <span style={{color:T.blue}}>
-                {(() => {
-                  const n = new Date();
-                  return `${String(n.getDate()).padStart(2,"0")}/${String(n.getMonth()+1).padStart(2,"0")}/${String(n.getFullYear()).slice(2)} - ${String(n.getHours()).padStart(2,"0")}:${String(n.getMinutes()).padStart(2,"0")}`;
-                })()}
-              </span>
-            </div>
-          </div>
-
-          {!stamped ? (
-            <button onClick={() => fileRef.current.click()} disabled={processing}
-              style={{padding:"14px",background:T.navActive,border:`1px solid ${T.green}55`,borderRadius:12,color:T.green,cursor:processing?"not-allowed":"pointer",fontSize:15,fontFamily:T.font,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
-              {processing
-                ? <><span style={{display:"inline-block",width:16,height:16,border:`2px solid ${T.green}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>Elaborazione…</>
-                : <><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Scatta foto</>
-              }
-            </button>
-          ) : (
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <img src={stamped} alt="Anteprima" style={{width:"100%",borderRadius:10,border:`1px solid ${T.border}`,display:"block"}}/>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={download}
-                  style={{flex:1,padding:"11px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:10,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  Salva foto
-                </button>
-                <button onClick={() => { setStamped(null); fileRef.current.value = ""; }}
-                  style={{padding:"11px 16px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:10,color:T.textSub,cursor:"pointer",fontSize:13,fontFamily:T.font}}>
-                  Ritenta
-                </button>
-              </div>
-            </div>
-          )}
-
-          <input ref={fileRef} type="file" accept="image/*" capture="environment"
-            onChange={handleFile} style={{display:"none"}}/>
+      {/* Fallback */}
+      {status === "fallback" && (
+        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:32}}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={T.yellow} strokeWidth="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <span style={{color:T.text,fontSize:14,textAlign:"center"}}>Fotocamera non disponibile in questo browser.<br/>Scegli una foto dalla galleria.</span>
+          <button onClick={() => fileRef.current.click()} style={{padding:"12px 28px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:10,color:T.blue,cursor:"pointer",fontSize:14,fontWeight:700}}>Scegli foto</button>
         </div>
-      </div>
+      )}
+
+      {/* Done toast */}
+      {status === "done" && (
+        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
+          <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(74,222,128,0.15)",border:`2px solid ${T.green}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={T.green} strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <span style={{color:T.green,fontSize:16,fontWeight:700}}>Foto salvata</span>
+        </div>
+      )}
+
+      {/* Error */}
+      {status === "error" && (
+        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:14,padding:32}}>
+          <span style={{color:T.red,fontSize:14,textAlign:"center"}}>{errMsg}</span>
+          <button onClick={() => setStatus("viewfinder")} style={{padding:"10px 24px",background:"transparent",border:`1px solid ${T.border}`,borderRadius:10,color:T.textSub,cursor:"pointer",fontSize:13}}>Riprova</button>
+        </div>
+      )}
+
+      {/* Uploading overlay */}
+      {status === "uploading" && (
+        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:10}}>
+          <div style={{width:36,height:36,border:`3px solid ${T.green}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
+          <span style={{color:"#fff",fontSize:13,fontWeight:600,textShadow:"0 1px 4px rgba(0,0,0,0.8)"}}>Caricamento…</span>
+        </div>
+      )}
+
+      {/* Bottom bar: stamp info + capture button */}
+      {(status === "viewfinder" || status === "capturing") && (
+        <div style={{position:"absolute",bottom:0,left:0,right:0,padding:"16px 20px 32px",background:"linear-gradient(transparent, rgba(0,0,0,0.8))",display:"flex",flexDirection:"column",gap:10,alignItems:"center"}}>
+          {/* Stamp preview */}
+          <div style={{fontFamily:T.mono,fontSize:11,color:"rgba(255,255,255,0.65)",textAlign:"center",lineHeight:1.6}}>
+            <span style={{color:T.green,fontWeight:700}}>FleetCC v{APP_VERSION}</span>
+            {address && <><br/>{address}</>}
+            {position && <><br/>{position[0].toFixed(5)}, {position[1].toFixed(5)}</>}
+          </div>
+          {/* Capture circle */}
+          <button onClick={captureAndUpload} disabled={isBusy}
+            style={{width:68,height:68,borderRadius:"50%",background:"rgba(255,255,255,0.92)",border:"4px solid rgba(255,255,255,0.4)",cursor:isBusy?"not-allowed":"pointer",boxShadow:"0 0 0 2px rgba(255,255,255,0.2), 0 4px 16px rgba(0,0,0,0.5)",transition:"transform 0.1s",flexShrink:0}}
+            onMouseDown={e=>e.currentTarget.style.transform="scale(0.93)"}
+            onMouseUp={e=>e.currentTarget.style.transform="scale(1)"}
+          />
+        </div>
+      )}
+
+      {/* Close button (top-right) */}
+      {!isBusy && status !== "done" && (
+        <button onClick={onClose}
+          style={{position:"absolute",top:16,right:16,width:36,height:36,borderRadius:"50%",background:"rgba(0,0,0,0.55)",border:"1px solid rgba(255,255,255,0.2)",color:"#fff",fontSize:20,lineHeight:"34px",textAlign:"center",cursor:"pointer",backdropFilter:"blur(4px)"}}>
+          ×
+        </button>
+      )}
+
     </div>
   );
 }

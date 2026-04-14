@@ -99,6 +99,28 @@ function useIsMobile(){
   return mob;
 }
 
+// ─── GEOLOCATION HOOK ─────────────────────────────────────────────────────────
+function useGeolocation(){
+  const [pos,setPos]=useState(null);
+  const [geoError,setGeoError]=useState(null);
+  const watchRef=useRef(null);
+  const start=useCallback(()=>{
+    if(!navigator.geolocation){setGeoError("Geolocalizzazione non supportata dal browser");return;}
+    setGeoError(null);
+    watchRef.current=navigator.geolocation.watchPosition(
+      p=>setPos([p.coords.latitude,p.coords.longitude]),
+      e=>setGeoError(e.code===1?"Permesso negato":e.message),
+      {enableHighAccuracy:true,maximumAge:10000,timeout:15000}
+    );
+  },[]);
+  const stop=useCallback(()=>{
+    if(watchRef.current!=null){navigator.geolocation.clearWatch(watchRef.current);watchRef.current=null;}
+    setPos(null);setGeoError(null);
+  },[]);
+  useEffect(()=>()=>{if(watchRef.current!=null)navigator.geolocation.clearWatch(watchRef.current);},[]);
+  return{pos,geoError,start,stop};
+}
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const statusLabel={active:"Attivo",idle:"Fermo",workshop:"Officina",waiting_parts:"Attesa Ricambi",in_progress:"In Corso",done:"Completato"};
 const statusColor={active:"#4ade80",idle:"#facc15",workshop:"#f87171",waiting_parts:"#fb923c",in_progress:"#60a5fa",done:"#6ee7b7"};
@@ -694,6 +716,10 @@ function GPSModule({onSelectVehicle,mode="live"}){
   const {auth}=useAuth();
   const {can}=usePerms();
   const isMobile=useIsMobile();
+  const {pos:myPos,geoError,start:startGeo,stop:stopGeo}=useGeolocation();
+  const [sharing,setSharing]=useState(false);
+  const [driverLocs,setDriverLocs]=useState([]);
+  const centeredRef=useRef(false); // auto-center only once
   const {data:vehicles,loading,error,refetch}=useApi("/gps/vehicles",{pollMs:10000});
   const [routes,setRoutes]=useState(null);
   const [visibleRoutes,setVisibleRoutes]=useState({});
@@ -1086,6 +1112,44 @@ function GPSModule({onSelectVehicle,mode="live"}){
 
   const canEdit=can("gps","edit");
   const editorActive=tab==="editor"&&editingId!==null;
+
+  // ── Geolocation: share position to backend ────────────────────────────────
+  const toggleSharing=useCallback(()=>{
+    if(!sharing){
+      startGeo();
+      setSharing(true);
+    } else {
+      stopGeo();
+      setSharing(false);
+      // tell backend we stopped
+      fetch(`${API}/gps/driver-location`,{method:"DELETE",headers:{Authorization:`Bearer ${auth.token}`}}).catch(()=>{});
+    }
+  },[sharing,startGeo,stopGeo,auth.token]);
+
+  // Auto-center map on first GPS fix
+  useEffect(()=>{
+    if(!myPos||centeredRef.current)return;
+    if(liveMapRef.current){liveMapRef.current.flyTo(myPos,16);centeredRef.current=true;}
+  },[myPos]);
+
+  // POST position every 30s while sharing
+  useEffect(()=>{
+    if(!sharing||!myPos)return;
+    const send=()=>fetch(`${API}/gps/driver-location`,{method:"POST",headers:{Authorization:`Bearer ${auth.token}`,"Content-Type":"application/json"},body:JSON.stringify({lat:myPos[0],lng:myPos[1]})}).catch(()=>{});
+    send();
+    const id=setInterval(send,30000);
+    return()=>clearInterval(id);
+  },[sharing,myPos,auth.token]);
+
+  // Poll other drivers' positions (every 30s) when on live tab
+  useEffect(()=>{
+    if(tab!=="live")return;
+    const poll=()=>fetch(`${API}/gps/driver-locations`,{headers:{Authorization:`Bearer ${auth.token}`}})
+      .then(r=>r.json()).then(d=>{if(d.ok)setDriverLocs(d.data);}).catch(()=>{});
+    poll();
+    const id=setInterval(poll,30000);
+    return()=>clearInterval(id);
+  },[tab,auth.token]);
   const inp={width:"100%",background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"8px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"};
 
   const visibleAnnotations=useMemo(()=>{
@@ -1270,6 +1334,8 @@ function GPSModule({onSelectVehicle,mode="live"}){
             annotations={visibleAnnotations}
             cdr={tab==="live"?cdr.filter(c=>c.lat&&c.lng):[]}
             onCdrClick={tab==="live"?(c)=>{setTab("cdr");editCdrItem(c);}:null}
+            myPosition={tab==="live"?myPos:null}
+            driverLocations={tab==="live"?driverLocs:[]}
           />}
           {tab==="zone"&&<ZoneMap zones={zones} drawMode={drawingZone} zoneConfig={zoneCfg} onShapeComplete={handleShapeComplete} onZoneDelete={deleteZone}/>}
           {tab==="punti"&&<PuntiMap punti={punti} drawMode={drawingPunti} onMapClick={handlePuntiMapClick} onPuntoDelete={deletePunto}/>}
@@ -1377,7 +1443,27 @@ function GPSModule({onSelectVehicle,mode="live"}){
               </div>}
             </div>
           )}
-          {tab==="live"&&<div style={{position:"absolute",bottom:10,left:10,zIndex:1000,fontSize:10,color:T.textSub,fontFamily:T.mono,background:"rgba(13,27,42,0.85)",padding:"4px 10px",borderRadius:6}}>Aggiornamento ogni 10s · Visirun mock</div>}
+          {tab==="live"&&(
+            <div style={{position:"absolute",bottom:10,left:10,zIndex:1000,display:"flex",flexDirection:"column",gap:6,alignItems:"flex-start"}}>
+              {/* Geolocation controls */}
+              <div style={{display:"flex",gap:6}}>
+                {myPos&&(
+                  <button onClick={()=>liveMapRef.current?.flyTo(myPos,17)}
+                    style={{background:"rgba(13,27,42,0.9)",border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                    Centra su di me
+                  </button>
+                )}
+                <button onClick={toggleSharing}
+                  style={{background:sharing?"rgba(74,222,128,0.15)":"rgba(13,27,42,0.9)",border:`1px solid ${sharing?T.green+"88":T.border}`,borderRadius:8,color:sharing?T.green:T.textSub,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill={sharing?"currentColor":"none"} stroke="currentColor" strokeWidth="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>
+                  {sharing?"Condivisione attiva":"Condividi posizione"}
+                </button>
+              </div>
+              {geoError&&<div style={{fontSize:10,color:T.red,background:"rgba(13,27,42,0.9)",padding:"4px 10px",borderRadius:6,backdropFilter:"blur(6px)"}}>{geoError}</div>}
+              <div style={{fontSize:10,color:T.textSub,fontFamily:T.mono,background:"rgba(13,27,42,0.85)",padding:"4px 10px",borderRadius:6}}>Aggiornamento ogni 10s · Visirun mock</div>
+            </div>
+          )}
           {/* ── PDF Export button ── */}
           {(tab==="live"||tab==="editor"||tab==="zone"||tab==="punti")&&(
             <button onClick={()=>setPdfPanel(p=>!p)}

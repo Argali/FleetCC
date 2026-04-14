@@ -4,7 +4,35 @@ import "leaflet/dist/leaflet.css";
 import T, { statusColor, statusLabel } from "../../theme";
 import Icon from "../ui/Icon";
 
-function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColor,zones,punti,onMapClick,onWaypointMove,onWaypointDelete,searchMarkerRef,snappedSegments,snapMode,onPathClick,annotations=[]}){
+// Inject pulsing-dot CSS once
+let _geoCssInjected = false;
+function injectGeoCss() {
+  if (_geoCssInjected) return;
+  _geoCssInjected = true;
+  const s = document.createElement("style");
+  s.textContent = `
+    @keyframes fleetcc-pulse {
+      0%   { transform: scale(1);   opacity: 0.6; }
+      70%  { transform: scale(2.4); opacity: 0;   }
+      100% { transform: scale(1);   opacity: 0;   }
+    }
+    .fleetcc-my-pos-ring {
+      position: absolute; width: 20px; height: 20px;
+      top: 0; left: 0; border-radius: 50%;
+      background: rgba(96,165,250,0.35);
+      animation: fleetcc-pulse 2s ease-out infinite;
+    }
+    .fleetcc-my-pos-dot {
+      position: absolute; width: 14px; height: 14px;
+      top: 3px; left: 3px; border-radius: 50%;
+      background: #60a5fa; border: 2.5px solid #fff;
+      box-shadow: 0 0 8px rgba(96,165,250,0.9);
+    }
+  `;
+  document.head.appendChild(s);
+}
+
+function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColor,zones,punti,onMapClick,onWaypointMove,onWaypointDelete,searchMarkerRef,snappedSegments,snapMode,onPathClick,annotations=[],myPosition,driverLocations}){
   const containerRef=useRef(null);
   const mapRef=useRef(null);
   const routeLayerRef=useRef(null);
@@ -13,6 +41,8 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
   const zoneLayerRef=useRef(null);
   const puntiLayerRef=useRef(null);
   const annotLayerRef=useRef(null);
+  const myPosLayerRef=useRef(null);
+  const driverLocsLayerRef=useRef(null);
   const cbClick=useRef(onMapClick);
   const cbMove=useRef(onWaypointMove);
   const cbDel=useRef(onWaypointDelete);
@@ -24,6 +54,7 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
 
   useEffect(()=>{
     if(!containerRef.current||mapRef.current)return;
+    injectGeoCss();
     const map=L.map(containerRef.current,{center:[44.835,11.619],zoom:13});
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',maxZoom:19}).addTo(map);
     routeLayerRef.current=L.layerGroup().addTo(map);
@@ -31,6 +62,8 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
     puntiLayerRef.current=L.layerGroup().addTo(map);
     annotLayerRef.current=L.layerGroup().addTo(map);
     vehicleLayerRef.current=L.layerGroup().addTo(map);
+    myPosLayerRef.current=L.layerGroup().addTo(map);
+    driverLocsLayerRef.current=L.layerGroup().addTo(map);
     editLayerRef.current=L.layerGroup().addTo(map);
     map.on("click",(e)=>{ if(cbClick.current)cbClick.current([e.latlng.lat,e.latlng.lng]); });
     mapRef.current=map;
@@ -153,6 +186,38 @@ function FleetMap({vehicles,routes,visibleRoutes,editMode,editWaypoints,editColo
       editLayerRef.current.addLayer(m);
     });
   },[editMode,editWaypoints,editColor,snappedSegments,snapMode]);
+
+  // My position — pulsing blue dot
+  useEffect(()=>{
+    if(!mapRef.current||!myPosLayerRef.current)return;
+    myPosLayerRef.current.clearLayers();
+    if(!myPosition)return;
+    const icon=L.divIcon({
+      className:"",
+      html:`<div style="position:relative;width:20px;height:20px"><div class="fleetcc-my-pos-ring"></div><div class="fleetcc-my-pos-dot"></div></div>`,
+      iconSize:[20,20],
+      iconAnchor:[10,10],
+    });
+    const m=L.marker(myPosition,{icon,zIndexOffset:3000,interactive:false});
+    myPosLayerRef.current.addLayer(m);
+  },[myPosition]);
+
+  // Other drivers sharing their position
+  useEffect(()=>{
+    if(!mapRef.current||!driverLocsLayerRef.current)return;
+    driverLocsLayerRef.current.clearLayers();
+    (driverLocations||[]).forEach(d=>{
+      const icon=L.divIcon({
+        className:"",
+        html:`<div style="position:relative;width:22px;height:22px;display:flex;align-items:center;justify-content:center"><div style="width:16px;height:16px;background:#4ade80;border:2.5px solid #fff;border-radius:50%;box-shadow:0 0 6px rgba(74,222,128,0.7)"></div></div>`,
+        iconSize:[22,22],
+        iconAnchor:[11,11],
+      });
+      const m=L.marker([d.lat,d.lng],{icon,zIndexOffset:2500});
+      m.bindTooltip(`<b>${d.name}</b><br><span style="font-size:10px;color:#888">Driver live</span>`,{sticky:false});
+      driverLocsLayerRef.current.addLayer(m);
+    });
+  },[driverLocations]);
 
   return <div ref={containerRef} style={{height:"100%",width:"100%"}}/>;
 }

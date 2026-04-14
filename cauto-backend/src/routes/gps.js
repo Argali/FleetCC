@@ -7,6 +7,10 @@ const { requireAuth, requirePerm } = require("../middleware/auth");
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+// In-memory driver location store (keyed by user ID, TTL 5 min)
+const driverLocations = new Map();
+const DRIVER_LOC_TTL = 5 * 60 * 1000;
+
 // ── Excel import helpers ───────────────────────────────────────────────────────
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -258,6 +262,41 @@ router.post("/routes/snap-to-roads", requireAuth, async (req, res) => {
     console.error("snap-to-roads error:", err);
     return res.status(500).json({ ok: false, error: "Errore durante lo snap-to-roads. Riprova o controlla i waypoint." });
   }
+});
+
+// ── Driver geolocation ────────────────────────────────────────────────────────
+
+// POST /gps/driver-location — driver shares their current GPS position
+router.post("/driver-location", requireAuth, (req, res) => {
+  const { lat, lng } = req.body;
+  if (lat == null || lng == null)
+    return res.status(400).json({ ok: false, error: "lat e lng obbligatori" });
+  driverLocations.set(req.user.id, {
+    lat: parseFloat(lat),
+    lng: parseFloat(lng),
+    name: req.user.name,
+    userId: req.user.id,
+    timestamp: Date.now(),
+  });
+  res.json({ ok: true });
+});
+
+// DELETE /gps/driver-location — driver stops sharing their position
+router.delete("/driver-location", requireAuth, (req, res) => {
+  driverLocations.delete(req.user.id);
+  res.json({ ok: true });
+});
+
+// GET /gps/driver-locations — returns all active driver positions (< 5 min old, excluding self)
+router.get("/driver-locations", requireAuth, requirePerm("gps", "view"), (req, res) => {
+  const now = Date.now();
+  const active = [];
+  for (const [id, loc] of driverLocations.entries()) {
+    if (now - loc.timestamp < DRIVER_LOC_TTL && id !== req.user.id) {
+      active.push({ lat: loc.lat, lng: loc.lng, name: loc.name, userId: loc.userId });
+    }
+  }
+  res.json({ ok: true, data: active });
 });
 
 module.exports = router;

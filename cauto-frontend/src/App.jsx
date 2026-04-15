@@ -912,12 +912,17 @@ function GPSModule({onSelectVehicle,mode="live"}){
     navAbortRef.current=new AbortController();
     setNavDestLoading(true);
     try{
-      const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`,{headers:{"Accept-Language":"it"},signal:navAbortRef.current.signal});
+      // Bias results toward the user's current position (±0.3° ≈ 30 km box)
+      const vb=myPos
+        ?`&viewbox=${myPos[1]-0.3},${myPos[0]+0.3},${myPos[1]+0.3},${myPos[0]-0.3}&bounded=0`
+        :"";
+      const url=`https://nominatim.openstreetmap.org/search?format=json&limit=8&countrycodes=it${vb}&q=${encodeURIComponent(q)}`;
+      const r=await fetch(url,{headers:{"Accept-Language":"it"},signal:navAbortRef.current.signal});
       const d=await r.json();
       if(!navAbortRef.current?.signal.aborted)setNavDestResults(d);
     }catch(e){if(e.name!=="AbortError")setNavDestResults([]);}
     setNavDestLoading(false);
-  },[]);
+  },[myPos]);
 
   const startNavigation=useCallback(async(dest)=>{
     if(!myPos){setNavError("Posizione GPS non disponibile.");return;}

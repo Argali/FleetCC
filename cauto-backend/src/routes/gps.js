@@ -338,9 +338,12 @@ router.post("/navigate", requireAuth, async (req, res) => {
 });
 
 // ── Stamped photo upload ──────────────────────────────────────────────────────
-router.post("/photo", requireAuth, photoUpload.single("photo"), (req, res) => {
-  if (!req.file) return res.status(400).json({ ok: false, error: "Nessuna foto ricevuta" });
-  res.status(201).json({ ok: true, url: `/uploads/${req.file.filename}` });
+router.post("/photo", requireAuth, (req, res, next) => {
+  photoUpload.single("photo")(req, res, (err) => {
+    if (err) return res.status(500).json({ ok: false, error: err.message || "Errore upload foto" });
+    if (!req.file) return res.status(400).json({ ok: false, error: "Nessuna foto ricevuta" });
+    res.status(201).json({ ok: true, url: `/uploads/${req.file.filename}` });
+  });
 });
 
 // ── Driver geolocation ────────────────────────────────────────────────────────

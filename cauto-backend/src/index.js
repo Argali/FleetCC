@@ -8,7 +8,12 @@ if (!process.env.JWT_SECRET) {
 const express   = require("express");
 const cors      = require("cors");
 const path      = require("path");
+const fs        = require("fs");
 const rateLimit = require("express-rate-limit");
+
+// Ensure uploads directory exists (Render ephemeral filesystem)
+const uploadsDir = path.join(__dirname, "../uploads");
+fs.mkdirSync(uploadsDir, { recursive: true });
 
 const app = express();
 const allowedOrigins = ["http://localhost:5173"];

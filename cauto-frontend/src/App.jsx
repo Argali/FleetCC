@@ -4317,6 +4317,16 @@ function formatSegDate(iso) {
   return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
 }
 
+// Extract the most likely comune from a Nominatim display_name string
+function extractComune(address) {
+  if (!address) return null;
+  const skip = /^(\d{5}|Italia|Province|Provincia|Città metropolitana|Comunità|Regione)/i;
+  const parts = address.split(", ");
+  // Skip first part (street name) and any part that looks like a postcode or country
+  const candidates = parts.slice(1).filter(p => !skip.test(p) && !/^\d+[a-zA-Z]?$/.test(p));
+  return candidates[0] || null;
+}
+
 function TerritorioModule() {
   const { auth }  = useAuth();
   const isMobile  = useIsMobile();
@@ -4325,12 +4335,21 @@ function TerritorioModule() {
 
   const [filterTipo,   setFilterTipo]   = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterComune, setFilterComune] = useState("all");
   const [search,       setSearch]       = useState("");
   const [selected,     setSelected]     = useState(null);
+
+  // Build sorted list of unique comuni from existing data
+  const comuni = useMemo(() => {
+    const set = new Set();
+    segnalazioni.forEach(s => { const c = extractComune(s.address); if (c) set.add(c); });
+    return [...set].sort((a, b) => a.localeCompare(b, "it"));
+  }, [segnalazioni]);
 
   const filtered = segnalazioni.filter(s => {
     if (filterTipo   !== "all" && s.tipo   !== filterTipo)   return false;
     if (filterStatus !== "all" && s.status !== filterStatus) return false;
+    if (filterComune !== "all" && extractComune(s.address) !== filterComune) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!(s.address||"").toLowerCase().includes(q) && !(s.note||"").toLowerCase().includes(q)) return false;
@@ -4373,6 +4392,13 @@ function TerritorioModule() {
             </button>
           ))}
         </div>
+        {comuni.length > 0 && (
+          <select value={filterComune} onChange={e=>setFilterComune(e.target.value)}
+            style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:8,color:T.text,padding:"8px 12px",fontSize:13,fontFamily:T.font,outline:"none",cursor:"pointer"}}>
+            <option value="all">Tutti i comuni</option>
+            {comuni.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {[["all","Tutti gli stati"],...Object.entries(TERR_STATUS).map(([k,v])=>[k,v.label])].map(([k,l])=>(
             <button key={k} onClick={()=>setFilterStatus(k)}

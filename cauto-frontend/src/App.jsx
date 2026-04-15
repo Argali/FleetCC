@@ -927,6 +927,10 @@ function GPSModule({onSelectVehicle,mode="live"}){
       const d=await r.json();
       if(!d.ok){setNavError(d.error||"Errore calcolo percorso");setNavStatus("idle");return;}
       setNavRoute(d.data);setNavStep(0);setNavStatus("active");
+      // Enter fullscreen (best-effort — not supported on iOS Safari)
+      const el=document.documentElement;
+      if(el.requestFullscreen)el.requestFullscreen().catch(()=>{});
+      else if(el.webkitRequestFullscreen)el.webkitRequestFullscreen();
       // Draw route on map
       if(liveMapRef.current){
         if(navPolyRef.current){navPolyRef.current.remove();navPolyRef.current=null;}
@@ -940,6 +944,10 @@ function GPSModule({onSelectVehicle,mode="live"}){
     setNavStatus("idle");setNavRoute(null);setNavStep(0);setNavDest(null);setNavError(null);
     setNavDestQuery("");setNavDestResults([]);
     if(navPolyRef.current){navPolyRef.current.remove();navPolyRef.current=null;}
+    // Exit fullscreen if active
+    if(document.fullscreenElement||document.webkitFullscreenElement){
+      (document.exitFullscreen||document.webkitExitFullscreen)?.call(document).catch(()=>{});
+    }
   },[]);
 
   // Auto-advance nav step as user moves

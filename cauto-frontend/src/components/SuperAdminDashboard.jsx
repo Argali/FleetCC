@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import T from "../theme";
+import { roleLabel, moduleLabel, levelColor } from "../theme";
 import { useAuth } from "../context/AuthContext";
+import { usePerms } from "../context/PermContext";
 import { API } from "../api";
 import { MODULE_META } from "../constants/moduleMeta";
 import Spinner from "./ui/Spinner";
@@ -97,6 +99,87 @@ function BugReportsPanel({auth}){
   );
 }
 
+const PERM_MODULES=["gps","navigation","foto_timbrata","cdr","zone","punti","percorsi","pdf_export","workshop","fuel","suppliers","costs"];
+
+function PermissionsPanel({auth}){
+  const {matrix,roles,levels,loadPerms}=usePerms();
+  const [local,setLocal]=useState(null);
+  const [saving,setSaving]=useState(false);
+  const [msg,setMsg]=useState(null);
+
+  useEffect(()=>{ if(matrix)setLocal(JSON.parse(JSON.stringify(matrix))); },[matrix]);
+
+  const setLevel=(role,mod,level)=>setLocal(m=>({...m,[role]:{...m[role],[mod]:level}}));
+
+  const save=async()=>{
+    setSaving(true);setMsg(null);
+    try{
+      const r=await fetch(`${API}/permissions`,{method:"PATCH",headers:{Authorization:`Bearer ${auth.token}`,"Content-Type":"application/json"},body:JSON.stringify({matrix:local})});
+      const d=await r.json();
+      if(d.ok){setMsg({ok:true,text:"Permessi salvati"});loadPerms();}
+      else setMsg({ok:false,text:d.error});
+    }catch{setMsg({ok:false,text:"Errore di rete"});}
+    setSaving(false);setTimeout(()=>setMsg(null),3000);
+  };
+
+  if(!local)return <Spinner/>;
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontSize:18,fontWeight:700,color:T.text}}>Permessi Globali</div>
+          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>Gestisci i livelli di accesso per ogni ruolo e modulo</div>
+        </div>
+        {msg&&<div style={{fontSize:12,padding:"8px 14px",borderRadius:8,background:msg.ok?"#0a1a0a":"#1a0808",border:`1px solid ${msg.ok?T.green:T.red}`,color:msg.ok?T.green:T.red}}>{msg.text}</div>}
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead>
+            <tr>
+              <th style={{padding:"12px 16px",textAlign:"left",color:T.textSub,fontWeight:600,fontSize:11,textTransform:"uppercase",letterSpacing:0.5,borderBottom:`1px solid ${T.border}`}}>Modulo</th>
+              {roles.map(r=><th key={r} style={{padding:"12px 16px",textAlign:"center",color:T.textSub,fontWeight:600,fontSize:11,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{roleLabel[r]||r}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {PERM_MODULES.map(mod=>(
+              <tr key={mod} style={{borderBottom:`1px solid ${T.border}22`}}>
+                <td style={{padding:"14px 16px",color:T.text,fontWeight:600,whiteSpace:"nowrap"}}>{moduleLabel[mod]||mod}</td>
+                {roles.map(role=>{
+                  const current=local[role]?.[mod]||"none";
+                  return(
+                    <td key={role} style={{padding:"8px 16px",textAlign:"center"}}>
+                      <div style={{display:"flex",gap:4,justifyContent:"center",flexWrap:"wrap"}}>
+                        {levels.map(lvl=>(
+                          <button key={lvl} onClick={()=>setLevel(role,mod,lvl)}
+                            style={{padding:"4px 9px",fontSize:10,borderRadius:6,cursor:"pointer",fontFamily:T.font,fontWeight:current===lvl?700:400,background:current===lvl?levelColor[lvl]+"33":"transparent",border:`1px solid ${current===lvl?levelColor[lvl]:T.border}`,color:current===lvl?levelColor[lvl]:T.textDim,transition:"all 0.1s"}}>
+                            {lvl}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginTop:4}}>
+        <button onClick={save} disabled={saving} style={{padding:"10px 22px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:saving?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+          {saving?"Salvando...":"💾 Salva e applica"}
+        </button>
+      </div>
+      <div style={{display:"flex",gap:16}}>
+        {[["none","Nessun accesso"],["view","Solo lettura"],["edit","Modifica"],["full","Accesso completo"]].map(([l,desc])=>(
+          <div key={l} style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:T.textSub}}>
+            <div style={{width:8,height:8,borderRadius:2,background:levelColor[l]}}/>{desc}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function SuperAdminDashboard(){
   const {auth}=useAuth();
   const [tab,setTab]=useState("tenants");
@@ -158,7 +241,7 @@ export default function SuperAdminDashboard(){
     <div style={{fontFamily:T.font,display:"flex",flexDirection:"column",gap:20}}>
       {/* Tab bar */}
       <div style={{display:"flex",gap:4,borderBottom:`1px solid ${T.border}`,paddingBottom:0}}>
-        {[["tenants","🏢 Tenant"],["bugs","🐛 Bug Report"]].map(([id,lbl])=>(
+        {[["tenants","🏢 Tenant"],["permissions","🔐 Permessi"],["bugs","🐛 Bug Report"]].map(([id,lbl])=>(
           <button key={id} onClick={()=>setTab(id)}
             style={{padding:"8px 18px",background:"transparent",border:"none",borderBottom:tab===id?`2px solid ${T.blue}`:"2px solid transparent",color:tab===id?T.blue:T.textSub,cursor:"pointer",fontFamily:T.font,fontSize:13,fontWeight:tab===id?700:400,marginBottom:-1}}>
             {lbl}
@@ -167,6 +250,7 @@ export default function SuperAdminDashboard(){
       </div>
 
       {tab==="bugs"&&<BugReportsPanel auth={auth}/>}
+      {tab==="permissions"&&<PermissionsPanel auth={auth}/>}
 
       {tab==="tenants"&&<>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>

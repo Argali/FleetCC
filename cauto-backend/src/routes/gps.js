@@ -274,6 +274,69 @@ router.post("/routes/snap-to-roads", requireAuth, async (req, res) => {
   }
 });
 
+// ── Turn-by-turn navigation (Valhalla) ───────────────────────────────────────
+router.post("/navigate", requireAuth, async (req, res) => {
+  const { from, to, costing = "auto" } = req.body;
+  if (!Array.isArray(from) || from.length < 2 || !Array.isArray(to) || to.length < 2) {
+    return res.status(400).json({ ok: false, error: "from e to [lat,lon] obbligatori" });
+  }
+  const valhallaUrl = process.env.VALHALLA_URL || "http://localhost:8002";
+  const costingMapped = costing === "truck" ? "truck" : "auto";
+  const body = {
+    locations: [
+      { lat: from[0], lon: from[1], type: "break" },
+      { lat: to[0],   lon: to[1],   type: "break" },
+    ],
+    costing: costingMapped,
+    directions_options: { language: "it-IT", units: "km" },
+  };
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    let response;
+    try {
+      response = await fetch(`${valhallaUrl}/route`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+    const data = await response.json();
+    if (!data.trip?.legs?.length) {
+      return res.status(502).json({ ok: false, error: "Nessun percorso trovato tra questi punti." });
+    }
+    const leg      = data.trip.legs[0];
+    const shape    = decodePolyline6(leg.shape);
+    const maneuvers = (leg.maneuvers || []).map(m => ({
+      type:        m.type,
+      instruction: m.instruction || "",
+      length:      m.length || 0,        // km
+      time:        m.time   || 0,        // seconds
+      begin_shape_index: m.begin_shape_index,
+      end_shape_index:   m.end_shape_index,
+    }));
+    const summary = data.trip.summary || {};
+    return res.json({
+      ok: true,
+      data: {
+        shape,
+        maneuvers,
+        distance: summary.length || 0,  // km total
+        duration: summary.time   || 0,  // seconds total
+      },
+    });
+  } catch (err) {
+    if (err.name === "AbortError" || err.code === "ECONNREFUSED" || err.cause?.code === "ECONNREFUSED") {
+      return res.status(503).json({ ok: false, error: "Valhalla non disponibile. Controlla la connessione." });
+    }
+    console.error("navigate error:", err);
+    return res.status(500).json({ ok: false, error: "Errore calcolo percorso." });
+  }
+});
+
 // ── Stamped photo upload ──────────────────────────────────────────────────────
 router.post("/photo", requireAuth, photoUpload.single("photo"), (req, res) => {
   if (!req.file) return res.status(400).json({ ok: false, error: "Nessuna foto ricevuta" });

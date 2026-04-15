@@ -722,6 +722,19 @@ function GPSModule({onSelectVehicle,mode="live"}){
   const centeredRef=useRef(false); // auto-center only once
   const [showCamera,setShowCamera]=useState(false);
   const [showMobileTabPicker,setShowMobileTabPicker]=useState(false);
+  // ── Navigation state ────────────────────────────────────────────────────────
+  const [showNavPanel,setShowNavPanel]=useState(false);
+  const [navStatus,setNavStatus]=useState("idle"); // idle|loading|active|arrived
+  const [navRoute,setNavRoute]=useState(null);     // {shape,maneuvers,distance,duration}
+  const [navStep,setNavStep]=useState(0);
+  const [navCosting,setNavCosting]=useState("auto");
+  const [navDestQuery,setNavDestQuery]=useState("");
+  const [navDestResults,setNavDestResults]=useState([]);
+  const [navDestLoading,setNavDestLoading]=useState(false);
+  const [navDest,setNavDest]=useState(null);       // {lat,lng,name}
+  const [navError,setNavError]=useState(null);
+  const navPolyRef=useRef(null);
+  const navAbortRef=useRef(null);
   const {data:vehicles,loading,error,refetch}=useApi("/gps/vehicles",{pollMs:10000});
   const [routes,setRoutes]=useState(null);
   const [visibleRoutes,setVisibleRoutes]=useState({});
@@ -891,6 +904,58 @@ function GPSModule({onSelectVehicle,mode="live"}){
     }catch(e){if(e.name!=="AbortError")setCdrMeta(m=>({...m,lat:null,lng:null}));}
     setCdrGeoLoading(false);
   },[cdrMeta.address]);
+
+  // ── Navigation functions ────────────────────────────────────────────────────
+  const searchNavDest=useCallback(async(q)=>{
+    if(!q.trim()){setNavDestResults([]);return;}
+    if(navAbortRef.current)navAbortRef.current.abort();
+    navAbortRef.current=new AbortController();
+    setNavDestLoading(true);
+    try{
+      const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`,{headers:{"Accept-Language":"it"},signal:navAbortRef.current.signal});
+      const d=await r.json();
+      if(!navAbortRef.current?.signal.aborted)setNavDestResults(d);
+    }catch(e){if(e.name!=="AbortError")setNavDestResults([]);}
+    setNavDestLoading(false);
+  },[]);
+
+  const startNavigation=useCallback(async(dest)=>{
+    if(!myPos){setNavError("Posizione GPS non disponibile.");return;}
+    setNavStatus("loading");setNavError(null);setNavDest(dest);setShowNavPanel(false);
+    try{
+      const r=await fetch(`${API}/gps/navigate`,{method:"POST",headers:{Authorization:`Bearer ${auth.token}`,"Content-Type":"application/json"},body:JSON.stringify({from:myPos,to:[dest.lat,dest.lng],costing:navCosting})});
+      const d=await r.json();
+      if(!d.ok){setNavError(d.error||"Errore calcolo percorso");setNavStatus("idle");return;}
+      setNavRoute(d.data);setNavStep(0);setNavStatus("active");
+      // Draw route on map
+      if(liveMapRef.current){
+        if(navPolyRef.current){navPolyRef.current.remove();navPolyRef.current=null;}
+        navPolyRef.current=L.polyline(d.data.shape,{color:"#3b82f6",weight:7,opacity:0.85}).addTo(liveMapRef.current);
+        liveMapRef.current.fitBounds(navPolyRef.current.getBounds(),{padding:[60,60]});
+      }
+    }catch{setNavError("Errore di rete");setNavStatus("idle");}
+  },[myPos,auth?.token,navCosting]);
+
+  const stopNavigation=useCallback(()=>{
+    setNavStatus("idle");setNavRoute(null);setNavStep(0);setNavDest(null);setNavError(null);
+    setNavDestQuery("");setNavDestResults([]);
+    if(navPolyRef.current){navPolyRef.current.remove();navPolyRef.current=null;}
+  },[]);
+
+  // Auto-advance nav step as user moves
+  useEffect(()=>{
+    if(navStatus!=="active"||!myPos||!navRoute)return;
+    const m=navRoute.maneuvers[navStep];
+    if(!m)return;
+    const endPt=navRoute.shape[m.end_shape_index];
+    if(!endPt)return;
+    const dist=distanceM(myPos,endPt);
+    const isLast=navStep>=navRoute.maneuvers.length-1;
+    if(dist<25){
+      if(isLast){setNavStatus("arrived");setTimeout(stopNavigation,4000);}
+      else setNavStep(s=>s+1);
+    }
+  },[myPos,navStatus,navRoute,navStep,stopNavigation]);
 
   const searchAddress=useCallback(async(q)=>{
     if(!q.trim()){setSearchResults([]);return;}
@@ -1604,7 +1669,52 @@ function GPSModule({onSelectVehicle,mode="live"}){
                   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                   <span style={{fontSize:9,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>FOTO</span>
                 </button>
+                {/* Navigation */}
+                {navStatus==="idle"||navStatus==="loading"?(
+                  <button onClick={()=>{setShowNavPanel(v=>!v);setNavError(null);}}
+                    style={{width:64,height:64,borderRadius:18,background:showNavPanel?"rgba(59,130,246,0.2)":"rgba(13,27,42,0.92)",border:`2px solid ${T.blue}88`,color:T.blue,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
+                    {navStatus==="loading"
+                      ?<div style={{width:24,height:24,border:`3px solid ${T.blue}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
+                      :<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>}
+                    <span style={{fontSize:9,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>NAVIGA</span>
+                  </button>
+                ):(
+                  <button onClick={stopNavigation}
+                    style={{width:64,height:64,borderRadius:18,background:"rgba(248,113,113,0.18)",border:`2px solid ${T.red}`,color:T.red,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                    <span style={{fontSize:9,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>STOP</span>
+                  </button>
+                )}
               </div>
+
+              {/* Navigation instruction banner */}
+              {navStatus==="active"&&navRoute&&(
+                <div style={{position:"absolute",top:12,left:64,right:64,zIndex:1003,background:"rgba(10,22,40,0.95)",border:`1px solid ${T.blue}66`,borderRadius:14,padding:"10px 16px",backdropFilter:"blur(12px)",boxShadow:"0 4px 20px rgba(0,0,0,0.6)"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <span style={{fontSize:28,lineHeight:1,color:T.blue,flexShrink:0}}>{NAV_ARROW[navRoute.maneuvers[navStep]?.type]||"↑"}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:14,fontWeight:700,color:T.text,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>
+                        {navRoute.maneuvers[navStep]?.instruction||"Continua dritto"}
+                      </div>
+                      <div style={{fontSize:11,color:T.blue,marginTop:3,fontFamily:T.mono}}>{fmtDist(navRoute.maneuvers[navStep]?.length||0)} · poi {navRoute.maneuvers[navStep+1]?NAV_ARROW[navRoute.maneuvers[navStep+1].type]||"↑":"🏁"}</div>
+                    </div>
+                    <div style={{fontSize:10,color:T.textSub,textAlign:"right",flexShrink:0}}>
+                      <div style={{fontWeight:600,color:T.text}}>{fmtDist(navRoute.distance)}</div>
+                      <div>{fmtTime(navRoute.duration)}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Arrived banner */}
+              {navStatus==="arrived"&&(
+                <div style={{position:"absolute",top:12,left:12,right:12,zIndex:1003,background:"rgba(74,222,128,0.15)",border:`1px solid ${T.green}`,borderRadius:14,padding:"14px 20px",backdropFilter:"blur(12px)",textAlign:"center"}}>
+                  <div style={{fontSize:22,marginBottom:4}}>🏁</div>
+                  <div style={{fontSize:15,fontWeight:700,color:T.green}}>Destinazione raggiunta!</div>
+                  {navDest?.name&&<div style={{fontSize:12,color:T.textSub,marginTop:2}}>{navDest.name}</div>}
+                </div>
+              )}
+
               {geoError&&(
                 <div style={{position:"absolute",bottom:20,left:12,zIndex:1001,fontSize:11,color:T.red,background:"rgba(13,27,42,0.9)",padding:"6px 12px",borderRadius:8,backdropFilter:"blur(6px)",maxWidth:"calc(100% - 100px)"}}>
                   {geoError}
@@ -1612,6 +1722,55 @@ function GPSModule({onSelectVehicle,mode="live"}){
               )}
             </>
           )}
+          {/* ── Navigation destination panel ── */}
+          {showNavPanel&&mobileFullscreen&&(
+            <div style={{position:"absolute",bottom:0,left:0,right:0,zIndex:1010,background:"rgba(10,16,26,0.97)",borderTop:`1px solid ${T.border}`,borderRadius:"20px 20px 0 0",padding:"20px 20px 36px",backdropFilter:"blur(16px)",boxShadow:"0 -8px 32px rgba(0,0,0,0.6)",fontFamily:T.font}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+                <div style={{fontSize:16,fontWeight:700,color:T.text}}>🧭 Navigazione</div>
+                <button onClick={()=>setShowNavPanel(false)} style={{background:"transparent",border:"none",color:T.textDim,fontSize:20,cursor:"pointer",lineHeight:1}}>✕</button>
+              </div>
+              {/* Costing toggle */}
+              <div style={{display:"flex",gap:6,marginBottom:14}}>
+                {[["auto","🚗 Auto"],["truck","🚛 Camion"]].map(([v,l])=>(
+                  <button key={v} onClick={()=>setNavCosting(v)}
+                    style={{flex:1,padding:"8px",borderRadius:10,border:`1px solid ${navCosting===v?T.blue:T.border}`,background:navCosting===v?T.navActive:"transparent",color:navCosting===v?T.blue:T.textSub,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:navCosting===v?700:400}}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {/* Destination search */}
+              <div style={{position:"relative",marginBottom:8}}>
+                <input
+                  value={navDestQuery}
+                  onChange={e=>{setNavDestQuery(e.target.value);searchNavDest(e.target.value);}}
+                  placeholder="Cerca indirizzo di destinazione…"
+                  autoFocus
+                  style={{width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:10,color:T.text,padding:"12px 44px 12px 14px",fontSize:14,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
+                {navDestLoading
+                  ?<div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",width:16,height:16,border:`2px solid ${T.blue}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
+                  :<svg style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)"}} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.textDim} strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>}
+              </div>
+              {navError&&<div style={{fontSize:12,color:T.red,marginBottom:8,padding:"8px 12px",background:"#1a0808",borderRadius:8,border:"1px solid #3a1a1a"}}>{navError}</div>}
+              {/* Results list */}
+              {navDestResults.length>0&&(
+                <div style={{maxHeight:220,overflowY:"auto",borderRadius:10,border:`1px solid ${T.border}`,background:T.card}}>
+                  {navDestResults.map((r,i)=>(
+                    <button key={i} onClick={()=>{
+                      const dest={lat:parseFloat(r.lat),lng:parseFloat(r.lon),name:r.display_name};
+                      setNavDestQuery(r.display_name);setNavDestResults([]);
+                      startNavigation(dest);
+                    }}
+                      style={{display:"block",width:"100%",padding:"12px 14px",background:"transparent",border:"none",borderBottom:`1px solid ${T.border}`,color:T.text,textAlign:"left",cursor:"pointer",fontSize:13,fontFamily:T.font,lineHeight:1.4}}>
+                      <div style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.display_name.split(",")[0]}</div>
+                      <div style={{fontSize:11,color:T.textSub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginTop:2}}>{r.display_name.split(",").slice(1).join(",").trim()}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!myPos&&<div style={{fontSize:12,color:T.orange,marginTop:8,textAlign:"center"}}>⚠ Attiva il GPS prima di navigare</div>}
+            </div>
+          )}
+
           {/* ── PDF Export button (hidden on mobile fullscreen) ── */}
           {(tab==="live"||tab==="editor"||tab==="zone"||tab==="punti")&&!mobileFullscreen&&(
             <button onClick={()=>setPdfPanel(p=>!p)}
@@ -3816,6 +3975,16 @@ function HomeModule({onSelectVehicle}){
     </div>
   );
 }
+
+// ─── NAVIGATION HELPERS ───────────────────────────────────────────────────────
+function distanceM([lat1,lon1],[lat2,lon2]){
+  const R=6371000,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function fmtDist(km){if(km<0.1)return`${Math.round(km*1000)} m`;if(km<10)return`${km.toFixed(1)} km`;return`${Math.round(km)} km`;}
+function fmtTime(s){const m=Math.round(s/60);if(m<60)return`${m} min`;return`${Math.floor(m/60)}h ${m%60}m`;}
+const NAV_ARROW={1:"↑",2:"↗",3:"↖",4:"↑",5:"↗",6:"→",7:"↪",8:"⤾",9:"⤿",10:"↩",11:"←",12:"↙",13:"↗",14:"↗",15:"↑",23:"⬤",24:"⬤"};
 
 // ─── STAMPED CAMERA ───────────────────────────────────────────────────────────
 const APP_VERSION = "0.1.0";

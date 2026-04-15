@@ -3933,7 +3933,10 @@ function LiveCamera({ position, auth, onClose }) {
         });
         if (cancelled) { s.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = s;
-        if (videoRef.current) { videoRef.current.srcObject = s; }
+        if (videoRef.current) {
+          videoRef.current.srcObject = s;
+          videoRef.current.play().catch(() => {}); // Android requires explicit play()
+        }
         setStatus("viewfinder");
       } catch {
         if (!cancelled) setStatus("fallback");
@@ -4032,11 +4035,14 @@ function LiveCamera({ position, auth, onClose }) {
       <canvas ref={canvasRef} style={{display:"none"}}/>
       <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFallbackFile} style={{display:"none"}}/>
 
-      {/* Live viewfinder */}
-      {(status === "viewfinder" || status === "capturing" || status === "uploading") && (
-        <video ref={videoRef} autoPlay playsInline muted
-          style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity: isBusy ? 0.5 : 1,transition:"opacity 0.2s"}}/>
-      )}
+      {/* Live viewfinder — always in DOM so videoRef is set before stream arrives */}
+      <video ref={videoRef} autoPlay playsInline muted
+        style={{
+          position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",
+          opacity:(status==="viewfinder"||status==="capturing"||status==="uploading")?(isBusy?0.5:1):0,
+          transition:"opacity 0.2s",
+          pointerEvents:"none",
+        }}/>
 
       {/* Starting spinner */}
       {status === "starting" && (

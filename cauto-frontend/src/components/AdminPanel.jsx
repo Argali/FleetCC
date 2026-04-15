@@ -19,7 +19,10 @@ export default function AdminPanel(){
   const [showNewUser,setShowNewUser]=useState(false);
   const [newUser,setNewUser]=useState({name:"",email:"",password:"",role:"coordinatore_operativo"});
   const [userMsg,setUserMsg]=useState(null);
-  const modules=["gps","navigation","foto_timbrata","cdr","zone","punti","percorsi","pdf_export","workshop","fuel","suppliers","costs"];
+  // Only show modules that the SuperAdmin has enabled for this tenant
+  const tenantModules = auth?.tenant?.modules || {};
+  const ALL_MODULES   = ["gps","navigation","foto_timbrata","cdr","zone","punti","percorsi","pdf_export","workshop","fuel","suppliers","costs"];
+  const modules       = ALL_MODULES.filter(m => tenantModules[m]);
 
   useEffect(()=>{ if(matrix)setLocalMatrix(JSON.parse(JSON.stringify(matrix))); },[matrix]);
   const loadUsers=useCallback(async()=>{

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -rn \"multer\" \"C:\\\\Users\\\\erwan\\\\Desktop\\\\Project command center\\\\cauto-backend\\\\\" --include=\"*.js\" 2>/dev/null | head -10)",
+      "Bash(npx vite:*)",
+      "Bash(node -e \"require\\('html2canvas'\\)\")",
+      "Bash(node -e \"require\\('jspdf'\\)\")",
+      "Bash(npm install:*)",
+      "Bash(grep -E \"\\\\.jsx$\")",
+      "Bash(wc -l \"C:\\\\Users\\\\erwan\\\\Desktop\\\\Project command center\\\\cauto-backend\\\\src\\\\routes\"/*.js)",
+      "mcp__4fcff0b8-a881-4086-8556-a8792b059340__notion-create-pages",
+      "Bash(python3 -c \" import sys, json data = sys.stdin.read\\(\\) lines = data.strip\\(\\).split\\('\\\\n'\\) for line in lines[-5:]: try: obj = json.loads\\(line\\) role = obj.get\\('role', ''\\) content = obj.get\\('content', ''\\) if isinstance\\(content, list\\): for c in content: if isinstance\\(c, dict\\) and c.get\\('type'\\) == 'text': print\\(f'[{role}]:', c['text'][:500]\\) elif isinstance\\(content, str\\): print\\(f'[{role}]:', content[:500]\\) except: pass \")"
+    ]
+  }
+}

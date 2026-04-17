@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="150" viewBox="0 0 500 150">
+  <defs>
+    <linearGradient id="grad-r1" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Hexagon icon -->
+  <g transform="translate(15, 15) scale(1.2)">
+    <polygon points="50,4 93,27 93,73 50,96 7,73 7,27" fill="url(#grad-r1)"/>
+    <circle cx="58" cy="34" r="12" fill="white"/>
+    <circle cx="58" cy="34" r="5" fill="url(#grad-r1)"/>
+    <line x1="58" y1="46" x2="58" y2="56" stroke="white" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="36" cy="52" r="6" fill="white"/>
+    <path d="M30 64 Q36 58 42 64" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M18,82 Q50,64 82,74" stroke="white" stroke-width="5" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- "FleetCC" text -->
+  <text x="148" y="72" font-family="Arial Black, Arial, sans-serif" font-size="46"
+        font-weight="bold" fill="white">Fleet<tspan fill="#06b6d4">CC</tspan></text>
+
+  <!-- "COMMAND CENTER" subtitle -->
+  <text x="150" y="100" font-family="Arial, sans-serif" font-size="16"
+        fill="#9ca3af" letter-spacing="3">COMMAND CENTER</text>
+</svg>

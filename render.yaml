@@ -6,6 +6,7 @@ services:
     rootDir: cauto-backend
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
@@ -14,4 +15,12 @@ services:
       - key: JWT_SECRET
         generateValue: true          # Render generates a secure random value
       - key: FRONTEND_URL
-        sync: false                  # You set this manually after deploy
+        sync: false                  # Set manually: your GitHub Pages URL e.g. https://argali.github.io/FleetCC
+      - key: SEED_SUPERADMIN_EMAIL
+        sync: false                  # e.g. superadmin@yourdomain.com
+      - key: SEED_SUPERADMIN_PASSWORD
+        sync: false                  # Strong password — never use the default
+      - key: SEED_OFFICINA_PASSWORD
+        sync: false                  # Strong password — never use the default
+      - key: SEED_ADMIN_PASSWORD
+        sync: false                  # Strong password — never use the default

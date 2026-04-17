@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>FleetCC</title>
+  <script>
+    // GitHub Pages SPA routing: redirect 404s back to index.html
+    // preserving the original path as a query param for restoration.
+    var path = window.location.pathname;
+    var base = '/FleetCC';
+    var rest = path.startsWith(base) ? path.slice(base.length) : path;
+    if (rest && rest !== '/') {
+      sessionStorage.setItem('spa_redirect', rest + window.location.search);
+    }
+    window.location.replace(base + '/');
+  </script>
+</head>
+<body></body>
+</html>

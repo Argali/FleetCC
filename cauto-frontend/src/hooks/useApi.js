@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useAuth } from "../context/AuthContext";
-import { API } from "../api";
+import { useAuth } from "@/core/auth/AuthContext";
+import { API } from "@/api";
 
 export function useApi(path, { pollMs=0, skip=false }={}) {
   const { auth, logout } = useAuth();

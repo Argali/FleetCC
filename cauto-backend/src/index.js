@@ -15,7 +15,18 @@ const rateLimit = require("express-rate-limit");
 const uploadsDir = path.join(__dirname, "../uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
 
+// Warn if seed credentials are still at their default values
+const SEED_DEFAULTS = ["change_me_superadmin", "change_me_officina", "change_me_admin"];
+["SEED_SUPERADMIN_PASSWORD", "SEED_OFFICINA_PASSWORD", "SEED_ADMIN_PASSWORD"].forEach(key => {
+  const val = process.env[key];
+  if (!val || SEED_DEFAULTS.includes(val)) {
+    console.warn(`WARNING: ${key} is using a default/insecure value — set a strong password before production use`);
+  }
+});
+
 const app = express();
+app.use(require("./middleware/securityHeaders"));
+
 const allowedOrigins = ["http://localhost:5173"];
 if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
 app.use(cors({ origin: allowedOrigins, credentials: true }));
@@ -36,6 +47,8 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   message: { ok: false, error: "Troppi tentativi. Riprova tra 15 minuti." },
 });
+
+app.get("/health", (_req, res) => res.json({ status: "ok", uptime: Math.floor(process.uptime()) }));
 
 app.use("/api/auth",        authLimiter, require("./routes/auth"));
 app.use("/api/gps",         require("./routes/gps"));

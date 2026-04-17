@@ -177,7 +177,7 @@ export default function Dashboard() {
       <div style={{ width: W, background: T.sidebar, borderRight: `1px solid ${T.border}`, display: "flex", flexDirection: "column", flexShrink: 0, transition: "width 260ms cubic-bezier(.4,0,.2,1)", overflow: "hidden" }}>
 
         {/* Logo */}
-        <div style={{ padding: sidebarOpen ? "16px 16px" : "16px 0", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: sidebarOpen ? "flex-start" : "center", gap: 10, flexShrink: 0 }}>
+        <div style={{ height: 64, padding: sidebarOpen ? "0 16px" : "0", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: sidebarOpen ? "flex-start" : "center", gap: 10, flexShrink: 0 }}>
           <FleetLogo size={32} />
           {sidebarOpen && (
             <div style={{ minWidth: 0, opacity: sidebarOpen ? 1 : 0, transition: "opacity 140ms" }}>
@@ -265,7 +265,7 @@ export default function Dashboard() {
 
       {/* Main content */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-        <div style={{ padding: "16px 24px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", background: T.sidebar, flexShrink: 0 }}>
+        <div style={{ height: 64, padding: "0 24px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", background: T.sidebar, flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {currentNav && <span style={{ color: T.textDim }}><Icon d={currentNav.icon} size={16} /></span>}
             <div>

@@ -1,55 +1,29 @@
-const jwt    = require("jsonwebtoken");
-const users  = require("../data/users");
-const perms  = require("../data/permissions");
+/**
+ * Auth & RBAC middleware — thin shim over src/core/.
+ *
+ * All logic lives in:
+ *   src/core/auth/auth.middleware.js  — requireAuth
+ *   src/core/rbac/rbac.middleware.js  — requirePerm, requirePermission,
+ *                                       requireSuperAdmin, requireAnyRole
+ *
+ * This file re-exports them so existing route files that import from
+ * "../middleware/auth" continue to work without changes.
+ */
 
-function requireAuth(req, res, next) {
-  const header = req.headers.authorization || "";
-  const token  = header.startsWith("Bearer ") ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ ok: false, error: "Token mancante" });
+const { requireAuth }                                   = require("../core/auth/auth.middleware");
+const { requirePermission, requirePerm,
+        requireSuperAdmin, requireAnyRole }             = require("../core/rbac/rbac.middleware");
 
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    const user    = users.findUserById(payload.sub);
-    if (!user || !user.active) return res.status(401).json({ ok: false, error: "Sessione non valida" });
-    req.user   = user;
-    req.tenant = { id: user.tenant_id };
-    next();
-  } catch {
-    res.status(401).json({ ok: false, error: "Token scaduto o non valido" });
-  }
-}
-
+/** requireRole(role) — kept for backward compat; prefer requireAnyRole */
 function requireRole(role) {
-  return (req, res, next) => {
-    if (req.user?.role !== role)
-      return res.status(403).json({ ok: false, error: "Accesso negato" });
-    next();
-  };
+  return requireAnyRole(role);
 }
 
-function requireAnyRole(...roles) {
-  return (req, res, next) => {
-    if (!roles.includes(req.user?.role))
-      return res.status(403).json({ ok: false, error: "Accesso negato" });
-    next();
-  };
-}
-
-function requireSuperAdmin(req, res, next) {
-  if (req.user?.role !== "superadmin")
-    return res.status(403).json({ ok: false, error: "Riservato al super-amministratore" });
-  next();
-}
-
-function requirePerm(module, level = "view") {
-  return (req, res, next) => {
-    // superadmin and company_admin bypass normal module permission checks
-    if (req.user?.role === "superadmin" || req.user?.role === "company_admin") return next();
-    const userLevel = perms.getLevel(req.user?.role, module);
-    if (!perms.hasAccess(userLevel, level))
-      return res.status(403).json({ ok: false, error: "Permesso insufficiente" });
-    next();
-  };
-}
-
-module.exports = { requireAuth, requireRole, requireAnyRole, requireSuperAdmin, requirePerm };
+module.exports = {
+  requireAuth,
+  requirePermission,
+  requirePerm,
+  requireSuperAdmin,
+  requireAnyRole,
+  requireRole,
+};

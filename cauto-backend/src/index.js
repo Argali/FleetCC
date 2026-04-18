@@ -5,6 +5,9 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
+// Start ERP ingestion scheduler (no-op when ERP_SOURCE=mock)
+require("./jobs/ingestionScheduler").start();
+
 const express   = require("express");
 const cors      = require("cors");
 const path      = require("path");

@@ -999,30 +999,30 @@ function GPSModule({onSelectVehicle,mode="live"}){
                 )}
                 {/* Share location */}
                 <button onClick={toggleSharing}
-                  style={{width:64,height:64,borderRadius:18,background:sharing?"rgba(74,222,128,0.18)":"rgba(13,27,42,0.92)",border:`2px solid ${sharing?T.green:T.border}`,color:sharing?T.green:T.textSub,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)",transition:"background 0.2s, border-color 0.2s, color 0.2s"}}>
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill={sharing?"currentColor":"none"} stroke="currentColor" strokeWidth="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>
-                  <span style={{fontSize:9,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>{sharing?"ATTIVO":"GPS"}</span>
+                  style={{width:96,height:96,borderRadius:27,background:sharing?"rgba(74,222,128,0.18)":"rgba(13,27,42,0.92)",border:`3px solid ${sharing?T.green:T.border}`,color:sharing?T.green:T.textSub,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)",transition:"background 0.2s, border-color 0.2s, color 0.2s"}}>
+                  <svg width="39" height="39" viewBox="0 0 24 24" fill={sharing?"currentColor":"none"} stroke="currentColor" strokeWidth="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>
+                  <span style={{fontSize:14,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>{sharing?"ATTIVO":"GPS"}</span>
                 </button>
                 {/* Camera */}
                 <button onClick={()=>setShowCamera(true)}
-                  style={{width:64,height:64,borderRadius:18,background:"rgba(13,27,42,0.92)",border:`2px solid ${alpha(T.yellow,53)}`,color:T.yellow,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                  <span style={{fontSize:9,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>FOTO</span>
+                  style={{width:96,height:96,borderRadius:27,background:"rgba(13,27,42,0.92)",border:`3px solid ${alpha(T.yellow,53)}`,color:T.yellow,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
+                  <svg width="39" height="39" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  <span style={{fontSize:14,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>FOTO</span>
                 </button>
                 {/* Navigation */}
                 {navStatus==="idle"||navStatus==="loading"?(
                   <button onClick={()=>{setShowNavPanel(v=>!v);setNavError(null);}}
-                    style={{width:64,height:64,borderRadius:18,background:showNavPanel?"rgba(59,130,246,0.2)":"rgba(13,27,42,0.92)",border:`2px solid ${alpha(T.blue,53)}`,color:T.blue,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
+                    style={{width:96,height:96,borderRadius:27,background:showNavPanel?"rgba(59,130,246,0.2)":"rgba(13,27,42,0.92)",border:`3px solid ${alpha(T.blue,53)}`,color:T.blue,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
                     {navStatus==="loading"
-                      ?<div style={{width:24,height:24,border:`3px solid ${T.blue}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
-                      :<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>}
-                    <span style={{fontSize:9,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>NAVIGA</span>
+                      ?<div style={{width:36,height:36,border:`4px solid ${T.blue}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
+                      :<svg width="39" height="39" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>}
+                    <span style={{fontSize:14,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>NAVIGA</span>
                   </button>
                 ):(
                   <button onClick={stopNavigation}
-                    style={{width:64,height:64,borderRadius:18,background:"rgba(248,113,113,0.18)",border:`2px solid ${T.red}`,color:T.red,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-                    <span style={{fontSize:9,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>STOP</span>
+                    style={{width:96,height:96,borderRadius:27,background:"rgba(248,113,113,0.18)",border:`3px solid ${T.red}`,color:T.red,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
+                    <svg width="39" height="39" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                    <span style={{fontSize:14,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>STOP</span>
                   </button>
                 )}
               </div>

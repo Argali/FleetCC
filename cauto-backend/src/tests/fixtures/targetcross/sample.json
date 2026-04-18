@@ -1,0 +1,23 @@
+{
+  "_comment": "Sample Target Cross fixture — simulates the raw data shape we expect from the real XML export. Update field names here once you have access to a real export.",
+  "vehicles": [
+    { "ID_MEZZO": "TC001", "TARGA": "FE 123 AA", "NOME_MEZZO": "Camion 01", "STATO": "Attivo",   "TIPO_MEZZO": "Compattatore Posteriore" },
+    { "ID_MEZZO": "TC002", "TARGA": "FE 456 BB", "NOME_MEZZO": "Camion 02", "STATO": "Inattivo", "TIPO_MEZZO": "Compattatore Posteriore" },
+    { "ID_MEZZO": "TC003", "TARGA": "FE 789 CC", "NOME_MEZZO": "Camion 03", "STATO": "Attivo",   "TIPO_MEZZO": "Campane"                 },
+    { "ID_MEZZO": "TC004", "TARGA": "FE 321 DD", "NOME_MEZZO": "Furgone 01","STATO": "Attivo",   "TIPO_MEZZO": "Vasca"                   },
+    { "ID_MEZZO": "TC005", "TARGA": "FE 654 EE", "NOME_MEZZO": "Furgone 02","STATO": "Inattivo", "TIPO_MEZZO": "Porter/Ape"              },
+    { "ID_MEZZO": "TC006", "TARGA": "FE 987 FF", "NOME_MEZZO": "Camion 04", "STATO": "Attivo",   "TIPO_MEZZO": "Scarrabile"              }
+  ],
+  "operators": [
+    { "ID_OPERATORE": "OP001", "NOME_OPERATORE": "Mario Rossi",   "EMAIL": "m.rossi@cauto.it",   "RUOLO": "Autista",    "STATO": "Attivo"   },
+    { "ID_OPERATORE": "OP002", "NOME_OPERATORE": "Luigi Bianchi", "EMAIL": "l.bianchi@cauto.it", "RUOLO": "Autista",    "STATO": "Attivo"   },
+    { "ID_OPERATORE": "OP003", "NOME_OPERATORE": "Anna Verdi",    "EMAIL": "a.verdi@cauto.it",   "RUOLO": "Supervisore","STATO": "Attivo"   },
+    { "ID_OPERATORE": "OP004", "NOME_OPERATORE": "Carlo Neri",    "EMAIL": null,                 "RUOLO": "Autista",    "STATO": "Inattivo" }
+  ],
+  "maintenance": [
+    { "ID_INTERVENTO": "MN001", "ID_MEZZO": "TC001", "TIPO_INTERVENTO": "Tagliando",       "DESCRIZIONE": "Cambio olio + filtri",     "DATA_INTERVENTO": "15/01/2026", "COSTO": "320.50", "KM": "85000", "STATO": "Chiuso"  },
+    { "ID_INTERVENTO": "MN002", "ID_MEZZO": "TC003", "TIPO_INTERVENTO": "Riparazione",     "DESCRIZIONE": "Sostituzione freni ant.", "DATA_INTERVENTO": "20/02/2026", "COSTO": "780.00", "KM": "92000", "STATO": "Chiuso"  },
+    { "ID_INTERVENTO": "MN003", "ID_MEZZO": "TC001", "TIPO_INTERVENTO": "Ispezione",       "DESCRIZIONE": "Revisione periodica",     "DATA_INTERVENTO": "10/03/2026", "COSTO": "150.00", "KM": "88500", "STATO": "Chiuso"  },
+    { "ID_INTERVENTO": "MN004", "ID_MEZZO": "TC004", "TIPO_INTERVENTO": "Manutenzione",    "DESCRIZIONE": null,                      "DATA_INTERVENTO": "2026-04-01", "COSTO": "N/A",    "KM": "45000", "STATO": "Aperto"  }
+  ]
+}

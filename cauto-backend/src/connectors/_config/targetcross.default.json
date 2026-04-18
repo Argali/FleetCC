@@ -1,0 +1,47 @@
+{
+  "connector": "targetcross",
+  "version":   "1.0",
+  "description": "Default field-alias mapping for Target Cross XML exports. Add client-specific overrides in targetcross.<tenant>.json",
+  "fields": {
+    "vehicles": {
+      "external_id":   ["ID_MEZZO",       "id_mezzo",   "VehicleId",   "vehicle_id"],
+      "license_plate": ["TARGA",           "targa",      "Plate",       "license_plate", "LicensePlate"],
+      "name":          ["NOME_MEZZO",      "nome_mezzo", "VehicleName", "name",          "description"],
+      "status":        ["STATO",           "stato",      "Status",      "active",        "Attivo"],
+      "vehicle_type":  ["TIPO_MEZZO",      "tipo_mezzo", "VehicleType", "type"],
+      "_transforms": {
+        "license_plate": ["trim", "italianPlate"],
+        "status":        ["activeStatus"],
+        "name":          ["trim"]
+      }
+    },
+    "operators": {
+      "external_id": ["ID_OPERATORE",    "id_operatore",  "OperatorId",   "operator_id", "MATRICOLA"],
+      "name":        ["NOME_OPERATORE",  "nome_operatore", "OperatorName", "name",        "COGNOME_NOME"],
+      "email":       ["EMAIL",           "email",          "Email"],
+      "role":        ["RUOLO",           "ruolo",          "Role"],
+      "status":      ["STATO",           "stato",          "Status",       "active"],
+      "_transforms": {
+        "name":   ["trim"],
+        "email":  ["trim", "lowercase"],
+        "status": ["activeStatus"]
+      }
+    },
+    "maintenance": {
+      "external_id":   ["ID_INTERVENTO",   "id_intervento",   "MaintenanceId"],
+      "vehicle_ext_id":["ID_MEZZO",        "id_mezzo",        "VehicleId"],
+      "event_type":    ["TIPO_INTERVENTO", "tipo_intervento", "EventType", "type"],
+      "description":   ["DESCRIZIONE",     "descrizione",     "Description", "notes"],
+      "date":          ["DATA_INTERVENTO", "data_intervento", "Date", "event_date"],
+      "cost_eur":      ["COSTO",           "costo",           "Cost", "cost_eur"],
+      "mileage_km":    ["KM",              "km",              "Mileage", "mileage_km"],
+      "status":        ["STATO",           "stato",           "Status"],
+      "_transforms": {
+        "date":       ["toISODate"],
+        "cost_eur":   ["toFloat"],
+        "mileage_km": ["toInt"],
+        "description":["trim"]
+      }
+    }
+  }
+}

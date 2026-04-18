@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { API } from "@/api";
-import T from "@/theme";
+import T, { alpha } from "@/theme";
 import { reverseGeocode } from "@/utils/geoUtils";
 
 const APP_VERSION = "0.1.0";
@@ -211,7 +211,7 @@ export default function LiveCamera({ position, auth, onClose }) {
         <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:32}}>
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={T.yellow} strokeWidth="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
           <span style={{color:T.text,fontSize:14,textAlign:"center"}}>Fotocamera non disponibile in questo browser.<br/>Scegli una foto dalla galleria.</span>
-          <button onClick={() => fileRef.current.click()} style={{padding:"12px 28px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:10,color:T.blue,cursor:"pointer",fontSize:14,fontWeight:700}}>Scegli foto</button>
+          <button onClick={() => fileRef.current.click()} style={{padding:"12px 28px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:10,color:T.blue,cursor:"pointer",fontSize:14,fontWeight:700}}>Scegli foto</button>
         </div>
       )}
 

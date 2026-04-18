@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { API } from "@/api";
-import T from "@/theme";
+import T, { alpha } from "@/theme";
 import { useAuth } from "@/core/auth/AuthContext";
 import { useApi } from "@/hooks/useApi";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -155,7 +155,7 @@ function TerritorioDetail({ segnalazione: s, auth, onClose, onRefresh }) {
                     style={{ padding: "4px 8px", background: "transparent", border: `1px solid ${T.border}`, borderRadius: 6, color: T.textDim, fontSize: 11, cursor: "pointer" }}>×</button>
                 )}
                 <button type="submit" disabled={sending}
-                  style={{ marginLeft: "auto", padding: "8px 20px", background: T.navActive, border: `1px solid ${T.blue}55`, borderRadius: 8, color: T.blue, fontSize: 13, fontFamily: T.font, fontWeight: 700, cursor: sending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                  style={{ marginLeft: "auto", padding: "8px 20px", background: T.navActive, border: `1px solid ${alpha(T.blue,33)}`, borderRadius: 8, color: T.blue, fontSize: 13, fontFamily: T.font, fontWeight: 700, cursor: sending ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
                   {sending && <span style={{ display: "inline-block", width: 12, height: 12, border: `2px solid ${T.blue}`, borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />}
                   Salva
                 </button>

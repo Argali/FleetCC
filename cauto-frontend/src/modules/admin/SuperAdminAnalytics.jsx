@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import T from "@/theme";
+import T, { alpha } from "@/theme";
 import { useAuth } from "@/core/auth/AuthContext";
 import { API } from "@/api";
 import Spinner from "@/shared/ui/Spinner";
@@ -72,7 +72,7 @@ export default function SuperAdminAnalytics(){
       </div>
 
       {inactive_alerts.length>0&&(
-        <div style={{background:T.card,border:`1px solid ${T.orange}44`,borderRadius:10,padding:"18px 20px"}}>
+        <div style={{background:T.card,border:`1px solid ${alpha(T.orange,27)}`,borderRadius:10,padding:"18px 20px"}}>
           <div style={{fontSize:13,fontWeight:700,color:T.orange,marginBottom:12}}>⚠ Allerta inattività ({inactive_alerts.length})</div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {inactive_alerts.map(a=>(
@@ -102,7 +102,7 @@ export default function SuperAdminAnalytics(){
             </thead>
             <tbody>
               {tenant_stats.map(t=>(
-                <tr key={t.id} style={{borderBottom:`1px solid ${T.border}22`}}>
+                <tr key={t.id} style={{borderBottom:`1px solid ${alpha(T.border,13)}`}}>
                   <td style={{padding:"12px 14px",color:T.text,fontWeight:600}}>{t.name}</td>
                   <td style={{padding:"12px 14px",color:T.textSub}}>{t.plan}</td>
                   <td style={{padding:"12px 14px",color:T.blue,fontFamily:T.mono}}>{t.user_count}</td>

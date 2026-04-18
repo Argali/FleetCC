@@ -11,6 +11,7 @@ export default function ThemeToggle({ collapsed = false }) {
 
   return (
     <button
+      data-testid="theme-toggle"
       onClick={toggle}
       title={isDark ? "Passa al tema chiaro" : "Passa al tema scuro"}
       style={{

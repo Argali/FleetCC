@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import L from "leaflet";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { API } from "@/api";
-import T, { statusColor, statusLabel } from "@/theme";
+import T, { alpha, statusColor, statusLabel } from "@/theme";
 import { useAuth } from "@/core/auth/AuthContext";
 import { usePerms } from "@/core/permissions/PermContext";
 import { useApi } from "@/hooks/useApi";
@@ -621,7 +621,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
                 {excelLoading&&<span style={{display:"inline-block",width:11,height:11,border:`2px solid ${T.green}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>}
                 {excelLoading?"Geocodifica…":"↑ Importa Excel"}
               </button>
-              <button onClick={startNew} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuovo percorso</button>
+              <button onClick={startNew} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuovo percorso</button>
             </>
           )}
           {tab==="editor"&&editingId&&(
@@ -633,7 +633,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
                       <button key={v} onClick={()=>setSnapCosting(v)} style={{padding:"5px 12px",background:snapCosting===v?T.navActive:T.bg,color:snapCosting===v?T.blue:T.textSub,border:"none",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600}}>{l}</button>
                     ))}
                   </div>
-                  <button onClick={handleSnapToRoads} disabled={snapLoading} style={{padding:"7px 14px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:snapLoading?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+                  <button onClick={handleSnapToRoads} disabled={snapLoading} style={{padding:"7px 14px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:snapLoading?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
                     {snapLoading&&<span style={{display:"inline-block",width:11,height:11,border:`2px solid ${T.blue}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>}
                     {snapLoading?"Calcolo…":"🛣 Segui le strade"}
                   </button>
@@ -655,7 +655,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
             <span style={{fontSize:11,color:T.red,display:"flex",alignItems:"center",maxWidth:340}}>{csvError}</span>
           )}
           {tab==="zone"&&!editingZone&&(
-            <button onClick={()=>setEditingZone(true)} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuova zona</button>
+            <button onClick={()=>setEditingZone(true)} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuova zona</button>
           )}
           {tab==="zone"&&editingZone&&drawingZone&&(
             <span style={{fontSize:11,color:T.textSub,display:"flex",alignItems:"center"}}>
@@ -663,13 +663,13 @@ function GPSModule({onSelectVehicle,mode="live"}){
             </span>
           )}
           {tab==="punti"&&!editingPunto&&(
-            <button onClick={()=>setEditingPunto(true)} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuovo punto</button>
+            <button onClick={()=>setEditingPunto(true)} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuovo punto</button>
           )}
           {tab==="punti"&&editingPunto&&drawingPunti&&(
             <span style={{fontSize:11,color:T.textSub,display:"flex",alignItems:"center"}}>Modalità attiva — click sulla mappa per aggiungere</span>
           )}
           {tab==="cdr"&&canEdit&&!editingCdr&&(
-            <button onClick={startNewCdr} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuovo Centro</button>
+            <button onClick={startNewCdr} style={{padding:"7px 16px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>+ Nuovo Centro</button>
           )}
           {tab==="cdr"&&editingCdr&&(
             <span style={{fontSize:11,color:T.textSub,display:"flex",alignItems:"center"}}>Disegna la planimetria del centro — usa gli strumenti nella toolbar</span>
@@ -715,7 +715,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
 
               {/* ── Segnalazione territorio (visible after address picked) ── */}
               {selectedSearchResult&&(
-                <div style={{background:T.card,border:`1px solid ${T.orange}44`,borderRadius:10,padding:"12px 13px",marginBottom:10,flexShrink:0}}>
+                <div style={{background:T.card,border:`1px solid ${alpha(T.orange,27)}`,borderRadius:10,padding:"12px 13px",marginBottom:10,flexShrink:0}}>
                   {/* header */}
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                     <div style={{display:"flex",alignItems:"center",gap:7}}>
@@ -936,7 +936,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {myPos&&(
                   <button onClick={()=>liveMapRef.current?.flyTo(myPos,17)}
-                    style={{background:"rgba(13,27,42,0.9)",border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
+                    style={{background:"rgba(13,27,42,0.9)",border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
                     Centra su di me
                   </button>
@@ -947,7 +947,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
                   {sharing?"Condivisione attiva":"Condividi posizione"}
                 </button>
                 <button onClick={()=>setShowCamera(true)}
-                  style={{background:"rgba(13,27,42,0.9)",border:`1px solid ${T.yellow}55`,borderRadius:8,color:T.yellow,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
+                  style={{background:"rgba(13,27,42,0.9)",border:`1px solid ${alpha(T.yellow,33)}`,borderRadius:8,color:T.yellow,padding:"7px 12px",cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                   Foto timbrata
                 </button>
@@ -980,7 +980,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
                 {/* Centre on me */}
                 {myPos&&(
                   <button onClick={()=>liveMapRef.current?.flyTo(myPos,17)}
-                    style={{width:64,height:64,borderRadius:18,background:"rgba(13,27,42,0.92)",border:`2px solid ${T.blue}88`,color:T.blue,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
+                    style={{width:64,height:64,borderRadius:18,background:"rgba(13,27,42,0.92)",border:`2px solid ${alpha(T.blue,53)}`,color:T.blue,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
                     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
                     <span style={{fontSize:9,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>CENTRA</span>
                   </button>
@@ -993,14 +993,14 @@ function GPSModule({onSelectVehicle,mode="live"}){
                 </button>
                 {/* Camera */}
                 <button onClick={()=>setShowCamera(true)}
-                  style={{width:64,height:64,borderRadius:18,background:"rgba(13,27,42,0.92)",border:`2px solid ${T.yellow}88`,color:T.yellow,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
+                  style={{width:64,height:64,borderRadius:18,background:"rgba(13,27,42,0.92)",border:`2px solid ${alpha(T.yellow,53)}`,color:T.yellow,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
                   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                   <span style={{fontSize:9,fontWeight:700,letterSpacing:0.4,lineHeight:1}}>FOTO</span>
                 </button>
                 {/* Navigation */}
                 {navStatus==="idle"||navStatus==="loading"?(
                   <button onClick={()=>{setShowNavPanel(v=>!v);setNavError(null);}}
-                    style={{width:64,height:64,borderRadius:18,background:showNavPanel?"rgba(59,130,246,0.2)":"rgba(13,27,42,0.92)",border:`2px solid ${T.blue}88`,color:T.blue,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
+                    style={{width:64,height:64,borderRadius:18,background:showNavPanel?"rgba(59,130,246,0.2)":"rgba(13,27,42,0.92)",border:`2px solid ${alpha(T.blue,53)}`,color:T.blue,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,backdropFilter:"blur(8px)",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>
                     {navStatus==="loading"
                       ?<div style={{width:24,height:24,border:`3px solid ${T.blue}`,borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
                       :<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>}
@@ -1017,7 +1017,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
 
               {/* Navigation instruction banner */}
               {navStatus==="active"&&navRoute&&(
-                <div style={{position:"absolute",top:12,left:64,right:64,zIndex:1003,background:"rgba(10,22,40,0.95)",border:`1px solid ${T.blue}66`,borderRadius:14,padding:"10px 16px",backdropFilter:"blur(12px)",boxShadow:"0 4px 20px rgba(0,0,0,0.6)"}}>
+                <div style={{position:"absolute",top:12,left:64,right:64,zIndex:1003,background:"rgba(10,22,40,0.95)",border:`1px solid ${alpha(T.blue,40)}`,borderRadius:14,padding:"10px 16px",backdropFilter:"blur(12px)",boxShadow:"0 4px 20px rgba(0,0,0,0.6)"}}>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
                     <span style={{fontSize:28,lineHeight:1,color:T.blue,flexShrink:0}}>{NAV_ARROW[navRoute.maneuvers[navStep]?.type]||"↑"}</span>
                     <div style={{flex:1,minWidth:0}}>
@@ -1183,7 +1183,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
             {/* ── gruppi list ── */}
             {percorsiViewMode==="gruppi"&&!editingGruppo&&(
               <>
-                <button onClick={()=>setEditingGruppo(true)} style={{padding:"7px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,flexShrink:0}}>+ Nuovo gruppo</button>
+                <button onClick={()=>setEditingGruppo(true)} style={{padding:"7px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,flexShrink:0}}>+ Nuovo gruppo</button>
                 {gruppi.length===0&&<div style={{fontSize:13,color:T.textDim,textAlign:"center",marginTop:12}}>Nessun gruppo</div>}
                 {gruppi.map(g=>(
                   <div key={g.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
@@ -1314,7 +1314,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
             {/* ── gruppi list ── */}
             {zoneViewMode==="gruppi"&&!editingGruppo&&(
               <>
-                <button onClick={()=>setEditingGruppo(true)} style={{padding:"7px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,flexShrink:0}}>+ Nuovo gruppo</button>
+                <button onClick={()=>setEditingGruppo(true)} style={{padding:"7px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,flexShrink:0}}>+ Nuovo gruppo</button>
                 {gruppi.length===0&&<div style={{fontSize:13,color:T.textDim,textAlign:"center",marginTop:12}}>Nessun gruppo</div>}
                 {gruppi.map(g=>(
                   <div key={g.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
@@ -1506,7 +1506,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
             {/* ── gruppi list ── */}
             {puntiViewMode==="gruppi"&&!editingGruppo&&(
               <>
-                <button onClick={()=>setEditingGruppo(true)} style={{padding:"7px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,flexShrink:0}}>+ Nuovo gruppo</button>
+                <button onClick={()=>setEditingGruppo(true)} style={{padding:"7px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:12,fontFamily:T.font,fontWeight:600,flexShrink:0}}>+ Nuovo gruppo</button>
                 {gruppi.length===0&&<div style={{fontSize:13,color:T.textDim,textAlign:"center",marginTop:12}}>Nessun gruppo</div>}
                 {gruppi.map(g=>(
                   <div key={g.id} style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
@@ -1685,7 +1685,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
                     style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,color:T.text,padding:"8px 10px",fontSize:13,fontFamily:T.font,outline:"none",boxSizing:"border-box"}}/>
                   <button onClick={()=>geocodeCdrAddress()} disabled={cdrGeoLoading||!cdrMeta.address?.trim()}
                     title="Geolocalizza indirizzo"
-                    style={{padding:"8px 10px",background:T.navActive,border:`1px solid ${T.blue}44`,borderRadius:6,color:cdrGeoLoading?T.textDim:T.blue,cursor:cdrGeoLoading?"wait":"pointer",fontSize:13,fontFamily:T.font,flexShrink:0}}>
+                    style={{padding:"8px 10px",background:T.navActive,border:`1px solid ${alpha(T.blue,27)}`,borderRadius:6,color:cdrGeoLoading?T.textDim:T.blue,cursor:cdrGeoLoading?"wait":"pointer",fontSize:13,fontFamily:T.font,flexShrink:0}}>
                     {cdrGeoLoading?"…":"📍"}
                   </button>
                 </div>
@@ -1786,7 +1786,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
                           ))}
                         </div>
                         <div style={{display:"flex",gap:5}}>
-                          <button onClick={()=>setAnnotEditId(null)} style={{flex:1,padding:"4px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:5,color:T.blue,cursor:"pointer",fontSize:11,fontWeight:600}}>✓ OK</button>
+                          <button onClick={()=>setAnnotEditId(null)} style={{flex:1,padding:"4px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:5,color:T.blue,cursor:"pointer",fontSize:11,fontWeight:600}}>✓ OK</button>
                           <button onClick={()=>setEditAnnotations(prev=>prev.filter(x=>x.id!==a.id))} style={{padding:"4px 8px",background:"#1a0808",border:"1px solid #3a1a1a",borderRadius:5,color:T.red,cursor:"pointer",fontSize:11}}>Elimina</button>
                         </div>
                       </div>
@@ -1822,7 +1822,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
                 </div>
               ))}
             </div>
-            <button onClick={()=>setExcelPopup(null)} style={{marginTop:4,padding:"8px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontWeight:600}}>Chiudi</button>
+            <button onClick={()=>setExcelPopup(null)} style={{marginTop:4,padding:"8px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontWeight:600}}>Chiudi</button>
           </div>
         </div>
       )}
@@ -1841,7 +1841,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
                 </div>
               ))}
             </div>
-            <button onClick={()=>setSnapPopup(null)} style={{marginTop:12,width:"100%",padding:"8px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontWeight:600}}>Chiudi</button>
+            <button onClick={()=>setSnapPopup(null)} style={{marginTop:12,width:"100%",padding:"8px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:7,color:T.blue,cursor:"pointer",fontSize:13,fontWeight:600}}>Chiudi</button>
           </div>
         </div>
       )}

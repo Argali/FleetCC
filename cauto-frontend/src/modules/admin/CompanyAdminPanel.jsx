@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import T from "@/theme";
-import { roleLabel } from "@/theme";
+import T, { alpha, roleLabel } from "@/theme";
 import { useAuth } from "@/core/auth/AuthContext";
 import { usePerms } from "@/core/permissions/PermContext";
 import { API } from "@/api";
@@ -80,7 +79,7 @@ export default function CompanyAdminPanel(){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontSize:13,color:T.textSub}}>{users.length} utenti nella tua organizzazione</div>
           <button onClick={()=>setShowNew(v=>!v)}
-            style={{padding:"9px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+            style={{padding:"9px 16px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
             {showNew?"✕ Annulla":"+ Nuovo utente"}
           </button>
         </div>
@@ -107,7 +106,7 @@ export default function CompanyAdminPanel(){
               </div>
             </div>
             <button onClick={createUser}
-              style={{alignSelf:"flex-start",padding:"9px 18px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+              style={{alignSelf:"flex-start",padding:"9px 18px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
               Crea utente
             </button>
           </div>

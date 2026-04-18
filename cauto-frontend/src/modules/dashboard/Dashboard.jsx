@@ -1,8 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from "react";
 import { msalInstance } from "@/msalConfig.js";
 import { API } from "@/api";
-import T from "@/theme";
-import { roleLabel } from "@/theme";
+import T, { alpha, roleLabel } from "@/theme";
 import { useAuth } from "@/core/auth/AuthContext";
 import { usePerms } from "@/core/permissions/PermContext";
 import { useApi } from "@/hooks/useApi";
@@ -246,13 +245,13 @@ export default function Dashboard() {
           </button>
           <ThemeToggle collapsed={!sidebarOpen} />
           <button onClick={() => setShowBugModal(true)}
-            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: sidebarOpen ? "flex-start" : "center", gap: 8, padding: sidebarOpen ? "8px 10px" : "8px 0", background: "transparent", border: `1px solid ${T.red}44`, borderRadius: 8, color: T.red, cursor: "pointer", fontFamily: T.font, fontSize: 12, marginTop: 4, transition: "border-color 0.15s, color 0.15s" }}
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: sidebarOpen ? "flex-start" : "center", gap: 8, padding: sidebarOpen ? "8px 10px" : "8px 0", background: "transparent", border: `1px solid ${alpha(T.red, 27)}`, borderRadius: 8, color: T.red, cursor: "pointer", fontFamily: T.font, fontSize: 12, marginTop: 4, transition: "border-color 0.15s, color 0.15s" }}
             title={!sidebarOpen ? "Segnala un bug" : ""}>
             <span style={{ fontSize: 13 }}>🐛</span>
             {sidebarOpen && "Segnala un bug"}
           </button>
           {sidebarOpen && API.includes("localhost") && (
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.orange, border: `1px solid ${T.orange}44`, borderRadius: 4, padding: "2px 6px", alignSelf: "flex-start", marginTop: 4 }}>DEV</div>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.orange, border: `1px solid ${alpha(T.orange, 27)}`, borderRadius: 4, padding: "2px 6px", alignSelf: "flex-start", marginTop: 4 }}>DEV</div>
           )}
           <button onClick={handleLogout}
             style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: sidebarOpen ? "flex-start" : "center", gap: 8, padding: sidebarOpen ? "8px 10px" : "8px 0", background: "transparent", border: `1px solid ${T.border}`, borderRadius: 8, color: T.textSub, cursor: "pointer", fontFamily: T.font, fontSize: 12, marginTop: 4, transition: "border-color 0.15s, color 0.15s" }}

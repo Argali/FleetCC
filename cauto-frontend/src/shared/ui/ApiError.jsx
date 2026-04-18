@@ -1,11 +1,11 @@
 import React from "react";
-import T from "@/theme";
+import T, { alpha } from "@/theme";
 
 function ApiError({ error, onRetry }) {
   return (
     <div style={{
-      background: `${T.red}11`,
-      border: `1px solid ${T.red}44`,
+      background: alpha(T.red, 7),
+      border: `1px solid ${alpha(T.red, 27)}`,
       borderRadius: 10,
       padding: "16px 20px",
       color: T.red,
@@ -19,8 +19,8 @@ function ApiError({ error, onRetry }) {
         <button
           onClick={onRetry}
           style={{
-            background: `${T.red}22`,
-            border: `1px solid ${T.red}44`,
+            background: alpha(T.red, 13),
+            border: `1px solid ${alpha(T.red, 27)}`,
             borderRadius: 6,
             color: T.red,
             padding: "5px 12px",

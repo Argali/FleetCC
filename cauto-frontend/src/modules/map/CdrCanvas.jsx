@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from "react";
 import { Stage, Layer, Rect as KonvaRect, Ellipse as KonvaEllipse, Line as KonvaLine, Text as KonvaText, Transformer as KonvaTransformer } from "react-konva";
-import T from "@/theme";
+import T, { alpha } from "@/theme";
 import { CDR_PALETTE, CDR_PAL_TABS, CDR_SWATCHES } from "@/constants/cdrPalette";
 
 function CdrCanvas({shapes,onChange,activeColor,activeOpacity}){
@@ -147,7 +147,7 @@ function CdrCanvas({shapes,onChange,activeColor,activeOpacity}){
 
   const selectedShape=shapes.find(s=>s.id===selectedId);
   const btnBase={padding:"4px 9px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:T.font,border:`1px solid ${T.border}`,background:"transparent",color:T.textSub};
-  const btnActive={...btnBase,border:`1px solid ${T.blue}66`,background:T.navActive,color:T.blue,fontWeight:700};
+  const btnActive={...btnBase,border:`1px solid ${alpha(T.blue,40)}`,background:T.navActive,color:T.blue,fontWeight:700};
 
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
@@ -163,7 +163,7 @@ function CdrCanvas({shapes,onChange,activeColor,activeOpacity}){
         <div style={{width:1,height:18,background:T.border,margin:"0 3px"}}/>
         {/* Palette toggle */}
         <button onClick={()=>setPaletteOpen(v=>!v)}
-          style={paletteOpen?{...btnBase,border:`1px solid ${T.green}66`,background:"#0a1a0a",color:T.green,fontWeight:700}:btnBase}>
+          style={paletteOpen?{...btnBase,border:`1px solid ${alpha(T.green,40)}`,background:"#0a1a0a",color:T.green,fontWeight:700}:btnBase}>
           🏗 Palette {paletteOpen?"▲":"▼"}
         </button>
         {/* Polygon hint */}
@@ -194,7 +194,7 @@ function CdrCanvas({shapes,onChange,activeColor,activeOpacity}){
       {paletteOpen&&(
         <div style={{background:"#0b1524",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
           {/* Tab bar */}
-          <div style={{display:"flex",gap:0,borderBottom:`1px solid ${T.border}22`}}>
+          <div style={{display:"flex",gap:0,borderBottom:`1px solid ${alpha(T.border,13)}`}}>
             {CDR_PAL_TABS.map(([id,lbl])=>(
               <button key={id} onClick={()=>setPaletteTab(id)}
                 style={{padding:"6px 16px",fontSize:11,fontWeight:paletteTab===id?700:400,fontFamily:T.font,cursor:"pointer",border:"none",borderBottom:paletteTab===id?`2px solid ${T.blue}`:"2px solid transparent",background:"transparent",color:paletteTab===id?T.blue:T.textSub,transition:"color 0.1s"}}>
@@ -261,7 +261,7 @@ function CdrCanvas({shapes,onChange,activeColor,activeOpacity}){
               onKeyDown={e=>{if(e.key==="Enter")commitText();if(e.key==="Escape"){setTextInput(null);setTextVal("");}}}
               style={{background:T.card,border:`1px solid ${T.blue}`,borderRadius:4,color:T.text,padding:"4px 8px",fontSize:13,fontFamily:T.font,outline:"none",minWidth:120}}
               placeholder="Testo..."/>
-            <button onClick={commitText} style={{background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:4,color:T.blue,padding:"4px 8px",cursor:"pointer",fontSize:12}}>✓</button>
+            <button onClick={commitText} style={{background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:4,color:T.blue,padding:"4px 8px",cursor:"pointer",fontSize:12}}>✓</button>
           </div>
         )}
 
@@ -272,7 +272,7 @@ function CdrCanvas({shapes,onChange,activeColor,activeOpacity}){
               onKeyDown={e=>{if(e.key==="Enter")commitLabel();if(e.key==="Escape"){setLabelEditId(null);setLabelVal("");}}}
               style={{background:T.card,border:`1px solid ${T.green}`,borderRadius:4,color:T.text,padding:"5px 10px",fontSize:13,fontFamily:T.font,outline:"none",minWidth:140,textAlign:"center"}}
               placeholder="Etichetta..."/>
-            <button onClick={commitLabel} style={{background:"#0a1a0a",border:`1px solid ${T.green}55`,borderRadius:4,color:T.green,padding:"5px 9px",cursor:"pointer",fontSize:12}}>✓</button>
+            <button onClick={commitLabel} style={{background:"#0a1a0a",border:`1px solid ${alpha(T.green,33)}`,borderRadius:4,color:T.green,padding:"5px 9px",cursor:"pointer",fontSize:12}}>✓</button>
             <button onClick={()=>{setLabelEditId(null);setLabelVal("");}} style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:4,color:T.textDim,padding:"5px 9px",cursor:"pointer",fontSize:12}}>✕</button>
           </div>
         )}

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import T from "@/theme";
-import { roleLabel, moduleLabel, levelColor } from "@/theme";
+import T, { alpha, roleLabel, moduleLabel, levelColor } from "@/theme";
 import { useAuth } from "@/core/auth/AuthContext";
 import { usePerms } from "@/core/permissions/PermContext";
 import { API } from "@/api";
@@ -77,7 +76,7 @@ export default function AdminPanel(){
               </thead>
               <tbody>
                 {modules.map(mod=>(
-                  <tr key={mod} style={{borderBottom:`1px solid ${T.border}22`}}>
+                  <tr key={mod} style={{borderBottom:`1px solid ${alpha(T.border,13)}`}}>
                     <td style={{padding:"14px 16px",color:T.text,fontWeight:600}}>{moduleLabel[mod]||mod}</td>
                     {roles.map(role=>{
                       const current=localMatrix[role]?.[mod]||"none";
@@ -100,7 +99,7 @@ export default function AdminPanel(){
             </table>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:12,marginTop:18}}>
-            <button onClick={saveMatrix} disabled={saving} style={{padding:"10px 22px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:saving?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+            <button onClick={saveMatrix} disabled={saving} style={{padding:"10px 22px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:saving?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
               {saving?"Salvando...":"💾 Salva e applica"}
             </button>
             {saveMsg&&<div style={{fontSize:13,color:saveMsg.ok?T.green:T.red}}>{saveMsg.text}</div>}
@@ -119,7 +118,7 @@ export default function AdminPanel(){
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{fontSize:13,color:T.textSub}}>{users.length} utenti</div>
-            <button onClick={()=>setShowNewUser(v=>!v)} style={{padding:"9px 16px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+            <button onClick={()=>setShowNewUser(v=>!v)} style={{padding:"9px 16px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
               {showNewUser?"✕ Annulla":"+ Nuovo utente"}
             </button>
           </div>
@@ -141,7 +140,7 @@ export default function AdminPanel(){
                   </select>
                 </div>
               </div>
-              <button onClick={createUser} style={{alignSelf:"flex-start",padding:"9px 18px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>Crea utente</button>
+              <button onClick={createUser} style={{alignSelf:"flex-start",padding:"9px 18px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>Crea utente</button>
             </div>
           )}
           {usersLoading?<Spinner/>:

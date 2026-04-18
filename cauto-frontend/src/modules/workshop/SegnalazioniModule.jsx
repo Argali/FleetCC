@@ -3,7 +3,7 @@ import { useAuth } from "@/core/auth/AuthContext";
 import { usePerms } from "@/core/permissions/PermContext";
 import { useApi } from "@/hooks/useApi";
 import { API, BASE_URL } from "@/api";
-import T from "@/theme";
+import T, { alpha } from "@/theme";
 import Spinner from "@/shared/ui/Spinner";
 import Icon from "@/shared/ui/Icon";
 
@@ -59,7 +59,7 @@ function SegnalazioniModule(){
     <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:T.font}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
         <div style={{fontSize:13,color:T.textSub}}>Riporta un problema, guasto o incidente su un veicolo</div>
-        <button onClick={()=>{setShowForm(v=>!v);setMsg(null);}} style={{padding:"9px 18px",background:T.navActive,border:`1px solid ${T.green}44`,borderRadius:8,color:T.green,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600,whiteSpace:"nowrap",flexShrink:0}}>
+        <button onClick={()=>{setShowForm(v=>!v);setMsg(null);}} style={{padding:"9px 18px",background:T.navActive,border:`1px solid ${alpha(T.green,27)}`,borderRadius:8,color:T.green,cursor:"pointer",fontSize:13,fontFamily:T.font,fontWeight:600,whiteSpace:"nowrap",flexShrink:0}}>
           {showForm?"✕ Annulla":"+ Nuova segnalazione"}
         </button>
       </div>
@@ -67,7 +67,7 @@ function SegnalazioniModule(){
       {msg&&<div style={{padding:"10px 16px",borderRadius:8,background:msg.ok?T.card:"#1a0808",border:`1px solid ${msg.ok?T.border:"#4a1a1a"}`,color:msg.ok?T.green:T.red,fontSize:13}}>{msg.text}</div>}
 
       {showForm&&(
-        <div style={{background:T.card,border:`1px solid ${T.green}33`,borderRadius:12,padding:22,display:"flex",flexDirection:"column",gap:16,boxShadow:"0 4px 12px rgba(0,0,0,0.2)"}}>
+        <div style={{background:T.card,border:`1px solid ${alpha(T.green,20)}`,borderRadius:12,padding:22,display:"flex",flexDirection:"column",gap:16,boxShadow:"0 4px 12px rgba(0,0,0,0.2)"}}>
           <div style={{fontSize:15,fontWeight:700,color:T.text}}>Nuova segnalazione</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
             <div><label style={lbl}>Nome segnalante</label><input value={form.reporter_name} onChange={e=>set("reporter_name")(e.target.value)} style={inp}/></div>
@@ -109,7 +109,7 @@ function SegnalazioniModule(){
               </div>
             }
           </div>
-          <button onClick={submit} disabled={submitting} style={{alignSelf:"flex-end",padding:"11px 26px",background:T.navActive,border:`1px solid ${T.green}44`,borderRadius:8,color:T.green,cursor:submitting?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+          <button onClick={submit} disabled={submitting} style={{alignSelf:"flex-end",padding:"11px 26px",background:T.navActive,border:`1px solid ${alpha(T.green,27)}`,borderRadius:8,color:T.green,cursor:submitting?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
             {submitting?"Invio in corso…":"Invia segnalazione"}
           </button>
         </div>

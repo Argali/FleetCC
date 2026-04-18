@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { msalInstance, loginRequest } from "@/msalConfig.js";
 import { useAuth } from "@/core/auth/AuthContext";
 import { API } from "@/api";
-import T from "@/theme";
+import T, { alpha } from "@/theme";
 import FleetLogo from "@/shared/ui/FleetLogo";
 
 function LoginScreen(){
@@ -50,25 +50,25 @@ function LoginScreen(){
         <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:16,padding:32,boxShadow:"0 20px 60px rgba(0,0,0,0.4)"}}>
           <div style={{fontSize:15,fontWeight:600,color:T.text,marginBottom:6}}>Accesso operatori</div>
           <div style={{fontSize:13,color:T.textSub,marginBottom:28}}>Usa il tuo account Microsoft aziendale</div>
-          {error&&<div style={{background:"#1a0808",border:"1px solid #4a1a1a",borderRadius:8,padding:"10px 14px",color:T.red,fontSize:13,marginBottom:16}}>{error}</div>}
-          <button onClick={handleMicrosoftLogin} disabled={loading}
-            style={{width:"100%",background:loading?"#1a2a3a":T.navActive,border:`1px solid ${T.blue}44`,borderRadius:10,color:loading?T.textDim:T.blue,padding:"13px 16px",fontSize:14,fontWeight:600,cursor:loading?"not-allowed":"pointer",fontFamily:T.font,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+          {error&&<div data-testid="login-error" style={{background:"#1a0808",border:"1px solid #4a1a1a",borderRadius:8,padding:"10px 14px",color:T.red,fontSize:13,marginBottom:16}}>{error}</div>}
+          <button data-testid="microsoft-login-btn" onClick={handleMicrosoftLogin} disabled={loading}
+            style={{width:"100%",background:loading?"#1a2a3a":T.navActive,border:`1px solid ${alpha(T.blue,27)}`,borderRadius:10,color:loading?T.textDim:T.blue,padding:"13px 16px",fontSize:14,fontWeight:600,cursor:loading?"not-allowed":"pointer",fontFamily:T.font,display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
             {!loading&&<svg width="18" height="18" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>}
             {loading?"Accesso in corso...":"Accedi con Microsoft"}
           </button>
 
           {/* Admin password login — collapsed by default */}
           <div style={{marginTop:20,borderTop:`1px solid ${T.border}`,paddingTop:16}}>
-            <button onClick={()=>{setShowAdmin(v=>!v);setError(null);}}
+            <button data-testid="toggle-admin-login" onClick={()=>{setShowAdmin(v=>!v);setError(null);}}
               style={{background:"transparent",border:"none",color:T.textDim,fontSize:11,cursor:"pointer",fontFamily:T.font,padding:0}}>
               {showAdmin?"▲ Nascondi":"▼ Accesso amministratore"}
             </button>
             {showAdmin&&(
-              <form onSubmit={handleAdminLogin} style={{display:"flex",flexDirection:"column",gap:10,marginTop:12}}>
-                <input type="email" placeholder="Email" value={adminEmail} onChange={e=>setAdminEmail(e.target.value)} required style={inp}/>
-                <input type="password" placeholder="Password" value={adminPwd} onChange={e=>setAdminPwd(e.target.value)} required style={inp}/>
-                <button type="submit" disabled={adminLoading}
-                  style={{padding:"10px",background:T.navActive,border:`1px solid ${T.textDim}44`,borderRadius:8,color:T.textSub,cursor:adminLoading?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+              <form data-testid="admin-login-form" onSubmit={handleAdminLogin} style={{display:"flex",flexDirection:"column",gap:10,marginTop:12}}>
+                <input data-testid="admin-email" type="email" placeholder="Email" value={adminEmail} onChange={e=>setAdminEmail(e.target.value)} required style={inp}/>
+                <input data-testid="admin-password" type="password" placeholder="Password" value={adminPwd} onChange={e=>setAdminPwd(e.target.value)} required style={inp}/>
+                <button data-testid="admin-submit" type="submit" disabled={adminLoading}
+                  style={{padding:"10px",background:T.navActive,border:`1px solid ${alpha(T.textDim,27)}`,borderRadius:8,color:T.textSub,cursor:adminLoading?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
                   {adminLoading?"Accesso...":"Accedi"}
                 </button>
               </form>

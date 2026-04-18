@@ -1,5 +1,47 @@
+/* ── Design tokens ─────────────────────────────────────────────────────────── */
+/* Default = dark. Light overrides declared under [data-theme="light"].        */
 :root {
   color-scheme: dark light;
+
+  --t-sidebar:     #0a1628;
+  --t-bg:          #1a2332;
+  --t-card:        #243447;
+  --t-card-border: #2e4a6a;
+  --t-border:      #263d5a;
+  --t-text:        #e2eaf5;
+  --t-text-sub:    #7a9bbf;
+  --t-text-dim:    #3d5a7a;
+  --t-green:       #4ade80;
+  --t-blue:        #60a5fa;
+  --t-orange:      #fb923c;
+  --t-red:         #f87171;
+  --t-yellow:      #facc15;
+  --t-teal:        #34d399;
+  --t-nav-active:  #0f2540;
+  --t-tab-line:    #3a7bd5;
+  --t-shadow-card: rgba(0,0,0,0.25);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --t-sidebar:     #ffffff;
+  --t-bg:          #ECF1F9;
+  --t-card:        #ffffff;
+  --t-card-border: #dde3ec;
+  --t-border:      #dde3ec;
+  --t-text:        #0f1b2d;
+  --t-text-sub:    #4a6b8f;
+  --t-text-dim:    #9aadc4;
+  --t-green:       #16a34a;
+  --t-blue:        #2563eb;
+  --t-orange:      #ea580c;
+  --t-red:         #dc2626;
+  --t-yellow:      #ca8a04;
+  --t-teal:        #0d9488;
+  --t-nav-active:  #e8f0ff;
+  --t-tab-line:    #2563eb;
+  --t-shadow-card: rgba(0,0,0,0.08);
 }
 
 @keyframes spin {

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import T from "@/theme";
-import { roleLabel, moduleLabel, levelColor } from "@/theme";
+import T, { alpha, roleLabel, moduleLabel, levelColor } from "@/theme";
 import { useAuth } from "@/core/auth/AuthContext";
 import { usePerms } from "@/core/permissions/PermContext";
 import { API } from "@/api";
@@ -142,7 +141,7 @@ function PermissionsPanel({auth}){
           </thead>
           <tbody>
             {PERM_MODULES.map(mod=>(
-              <tr key={mod} style={{borderBottom:`1px solid ${T.border}22`}}>
+              <tr key={mod} style={{borderBottom:`1px solid ${alpha(T.border,13)}`}}>
                 <td style={{padding:"14px 16px",color:T.text,fontWeight:600,whiteSpace:"nowrap"}}>{moduleLabel[mod]||mod}</td>
                 {roles.map(role=>{
                   const current=local[role]?.[mod]||"none";
@@ -165,7 +164,7 @@ function PermissionsPanel({auth}){
         </table>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:12,marginTop:4}}>
-        <button onClick={save} disabled={saving} style={{padding:"10px 22px",background:T.navActive,border:`1px solid ${T.blue}55`,borderRadius:8,color:T.blue,cursor:saving?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
+        <button onClick={save} disabled={saving} style={{padding:"10px 22px",background:T.navActive,border:`1px solid ${alpha(T.blue,33)}`,borderRadius:8,color:T.blue,cursor:saving?"not-allowed":"pointer",fontSize:13,fontFamily:T.font,fontWeight:600}}>
           {saving?"Salvando...":"💾 Salva e applica"}
         </button>
       </div>
@@ -272,7 +271,7 @@ export default function SuperAdminDashboard(){
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   <div style={{fontSize:14,fontWeight:700,color:T.text}}>{t.name}</div>
                   <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:T.navActive,color:T.textSub,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>{t.plan}</span>
-                  {inactive&&t.active&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:"#1a0a0a",color:T.orange,border:`1px solid ${T.orange}44`,fontWeight:600}}>⚠ Inattivo {daysAgo}gg</span>}
+                  {inactive&&t.active&&<span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:"#1a0a0a",color:T.orange,border:`1px solid ${alpha(T.orange,27)}`,fontWeight:600}}>⚠ Inattivo {daysAgo}gg</span>}
                 </div>
                 <div style={{fontSize:11,color:T.textDim,marginTop:3}}>{t.id} · {enabledCount} moduli attivi · ultimo accesso {daysAgo===0?"oggi":`${daysAgo}gg fa`}</div>
               </div>

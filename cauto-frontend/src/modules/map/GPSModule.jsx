@@ -18,6 +18,7 @@ import ZoneMap from "@/modules/map/ZoneMap";
 import PuntiMap from "@/modules/map/PuntiMap";
 import CdrCanvas from "@/modules/map/CdrCanvas";
 import LiveCamera from "@/modules/map/LiveCamera";
+import EditoreModule from "@/modules/map/EditoreModule";
 
 // ─── GPS MODULE ───────────────────────────────────────────────────────────────
 const EMPTY_META={name:"",color:"#4ade80",opacity:0.85,comune:"",materiale:"",sector:""};
@@ -601,6 +602,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
     {id:"editor",  label:"Percorsi",            icon:"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7",                                             modes:["editors"]},
     {id:"zone",    label:"Zone",                icon:"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",                                                 modes:["editors"]},
     {id:"punti",   label:"Punti",               icon:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z M12 10m-3 0a3 3 0 1 0 6 0 3 3 0 1 0-6 0",                modes:["editors"]},
+    {id:"editore", label:"Editore",             icon:"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7 M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z", modes:["editors"]},
   ];
   const gpsTabs=ALL_GPS_TABS.filter(t=>t.modes.includes(mode));
 
@@ -810,7 +812,17 @@ function GPSModule({onSelectVehicle,mode="live"}){
           </div>
         )}
 
-        <div ref={mapContainerRef} style={{flex:1,borderRadius:12,border:`1px solid ${T.border}`,position:"relative",overflow:"hidden"}}>
+        {tab==="editore"&&(
+          <EditoreModule
+            routes={routes} loadRoutes={loadRoutes}
+            zones={zones} setZones={setZones}
+            punti={punti} setPunti={setPunti}
+            gruppi={gruppi} setGruppi={setGruppi}
+            auth={auth}
+          />
+        )}
+
+        <div ref={mapContainerRef} style={{flex:1,borderRadius:12,border:`1px solid ${T.border}`,position:"relative",overflow:"hidden",display:tab==="editore"?"none":"block"}}>
           {(tab==="live"||tab==="editor")&&<FleetMap
             vehicles={vehicles} routes={routes||[]} visibleRoutes={visibleRoutes}
             zones={tab==="live"?zones.filter(z=>visibleZones[z.id]!==false):[]} punti={tab==="live"?punti.filter(p=>visiblePunti[p.id]!==false):[]}

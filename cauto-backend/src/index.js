@@ -10,6 +10,7 @@ const cors      = require("cors");
 const path      = require("path");
 const fs        = require("fs");
 const rateLimit = require("express-rate-limit");
+const { errorHandler } = require("./middleware/errorHandler");
 
 // Ensure uploads directory exists (Render ephemeral filesystem)
 const uploadsDir = path.join(__dirname, "../uploads");
@@ -63,6 +64,9 @@ app.use("/api/segnalazioni-territorio",require("./routes/segnalazioni-territorio
 app.use("/api/reports",     require("./routes/reports"));
 app.use("/api/superadmin",  require("./routes/superadmin"));
 app.use("/api/bugs",        require("./routes/bugs"));
+
+// Centralized error handler — must be registered AFTER all routes
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Cauto backend running on http://localhost:${PORT}`));

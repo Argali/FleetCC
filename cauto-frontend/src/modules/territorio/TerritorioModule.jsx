@@ -5,6 +5,7 @@ import { useAuth } from "@/core/auth/AuthContext";
 import { useApi } from "@/hooks/useApi";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { formatSegDate, extractComune } from "@/utils/geoUtils";
+import TabBar from "@/shared/ui/TabBar";
 
 const TIPO_META = {
   mancata_raccolta: { label: "Mancata raccolta", color: "#f87171", bg: "rgba(248,113,113,0.12)" },
@@ -19,6 +20,208 @@ const TERR_STATUS = {
   chiusa:         { label: "Chiusa",         color: "#4ade80" },
 };
 
+// ── Lightbox ─────────────────────────────────────────────────────────────────
+function Lightbox({ item, onClose, onPrev, onNext, hasPrev, hasNext }) {
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft" && hasPrev) onPrev();
+      if (e.key === "ArrowRight" && hasNext) onNext();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose, onPrev, onNext, hasPrev, hasNext]);
+
+  const tm  = TIPO_META[item.seg.tipo]  || TIPO_META.altro;
+  const sm  = TERR_STATUS[item.seg.status] || TERR_STATUS.aperta;
+
+  return (
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 4000, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: T.font, padding: 16 }}>
+
+      {/* Close */}
+      <button onClick={onClose}
+        style={{ position: "absolute", top: 16, right: 16, width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1 }}>
+        ×
+      </button>
+
+      {/* Prev / Next */}
+      {hasPrev && (
+        <button onClick={onPrev}
+          style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", fontSize: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          ‹
+        </button>
+      )}
+      {hasNext && (
+        <button onClick={onNext}
+          style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", fontSize: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          ›
+        </button>
+      )}
+
+      {/* Image */}
+      <img
+        src={item.photo_url}
+        alt="Foto intervento"
+        style={{ maxWidth: "min(860px, calc(100vw - 100px))", maxHeight: "65vh", objectFit: "contain", borderRadius: 10, boxShadow: "0 8px 48px rgba(0,0,0,0.6)" }}
+      />
+
+      {/* Info card below image */}
+      <div style={{ marginTop: 16, background: "rgba(15,23,42,0.92)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "14px 20px", width: "min(520px, calc(100vw - 32px))", backdropFilter: "blur(8px)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+          <span style={{ padding: "2px 9px", borderRadius: 10, background: tm.bg, color: tm.color, fontSize: 11, fontWeight: 700 }}>{tm.label}</span>
+          <span style={{ padding: "2px 9px", borderRadius: 10, background: `${sm.color}18`, color: sm.color, fontSize: 11, fontWeight: 700 }}>{sm.label}</span>
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#e2eaf5", marginBottom: 4 }}>
+          {item.seg.address || `${item.seg.lat?.toFixed(5)}, ${item.seg.lng?.toFixed(5)}`}
+        </div>
+        {item.note && <div style={{ fontSize: 12, color: "rgba(226,234,245,0.7)", marginBottom: 6, lineHeight: 1.5 }}>{item.note}</div>}
+        <div style={{ display: "flex", gap: 16, fontSize: 11, color: "rgba(226,234,245,0.45)" }}>
+          <span>📷 {item.done_by_name}</span>
+          <span>🕐 {formatSegDate(item.done_at)}</span>
+        </div>
+        <a href={item.photo_url} target="_blank" rel="noreferrer"
+          style={{ display: "inline-block", marginTop: 10, fontSize: 11, color: T.blue, textDecoration: "none", fontWeight: 600 }}>
+          Apri originale ↗
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ── Gallery tab ───────────────────────────────────────────────────────────────
+function GalleriaTab({ segnalazioni }) {
+  const isMobile   = useIsMobile();
+  const [filterTipo,   setFilterTipo]   = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [lightboxIdx,  setLightboxIdx]  = useState(null);
+
+  // Flatten all photos from all interventions
+  const photos = useMemo(() => {
+    const out = [];
+    segnalazioni.forEach(seg => {
+      (seg.interventions || []).forEach(int => {
+        if (int.photo_url) {
+          out.push({
+            id:          int.id,
+            photo_url:   int.photo_url,
+            note:        int.note,
+            done_by_name:int.done_by_name,
+            done_at:     int.done_at,
+            seg,
+          });
+        }
+      });
+    });
+    // Newest first
+    return out.sort((a, b) => new Date(b.done_at) - new Date(a.done_at));
+  }, [segnalazioni]);
+
+  const filtered = photos.filter(p => {
+    if (filterTipo   !== "all" && p.seg.tipo   !== filterTipo)   return false;
+    if (filterStatus !== "all" && p.seg.status !== filterStatus) return false;
+    return true;
+  });
+
+  const lbItem = lightboxIdx != null ? filtered[lightboxIdx] : null;
+
+  if (photos.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: "60px 24px", color: T.textDim }}>
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" style={{ opacity: 0.3, marginBottom: 14 }}>
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+          <circle cx="12" cy="13" r="4" />
+        </svg>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>Nessuna foto ancora</div>
+        <div style={{ fontSize: 12, marginTop: 6 }}>Le foto allegate agli interventi appariranno qui</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Summary */}
+      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ fontSize: 13, color: T.textSub }}>
+          <span style={{ fontWeight: 700, color: T.text }}>{filtered.length}</span> foto
+          {filtered.length !== photos.length && ` di ${photos.length} totali`}
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+        {[["all", "Tutti"], ["mancata_raccolta", "M. Raccolta"], ["abbandono", "Abbandono"], ["da_pulire", "Da pulire"], ["altro", "Altro"]].map(([k, l]) => (
+          <button key={k} onClick={() => setFilterTipo(k)}
+            style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${filterTipo === k ? (TIPO_META[k]?.color || T.blue) : T.border}`, background: filterTipo === k ? (TIPO_META[k]?.bg || T.navActive) : "transparent", color: filterTipo === k ? (TIPO_META[k]?.color || T.blue) : T.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.font }}>
+            {l}
+          </button>
+        ))}
+        <div style={{ width: 1, background: T.border, margin: "0 4px" }} />
+        {[["all", "Tutti gli stati"], ...Object.entries(TERR_STATUS).map(([k, v]) => [k, v.label])].map(([k, l]) => (
+          <button key={k} onClick={() => setFilterStatus(k)}
+            style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${filterStatus === k ? (TERR_STATUS[k]?.color || T.blue) : T.border}`, background: filterStatus === k ? `${TERR_STATUS[k]?.color || T.blue}20` : "transparent", color: filterStatus === k ? (TERR_STATUS[k]?.color || T.blue) : T.textSub, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.font }}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 32, color: T.textDim, fontSize: 13 }}>Nessuna foto corrisponde ai filtri</div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(auto-fill,minmax(220px,1fr))", gap: 10 }}>
+          {filtered.map((item, idx) => {
+            const tm = TIPO_META[item.seg.tipo] || TIPO_META.altro;
+            return (
+              <div key={item.id} onClick={() => setLightboxIdx(idx)}
+                style={{ position: "relative", borderRadius: 10, overflow: "hidden", cursor: "pointer", aspectRatio: "4/3", background: T.card, border: `1px solid ${T.cardBorder}`, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", transition: "transform 0.15s, box-shadow 0.15s" }}
+                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 6px 24px rgba(0,0,0,0.28)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.15)"; }}>
+
+                <img src={item.photo_url} alt="Foto"
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+
+                {/* Gradient overlay */}
+                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)" }} />
+
+                {/* Tipo badge top-left */}
+                <div style={{ position: "absolute", top: 8, left: 8 }}>
+                  <span style={{ padding: "2px 8px", borderRadius: 8, background: tm.bg, color: tm.color, fontSize: 10, fontWeight: 700, backdropFilter: "blur(4px)", border: `1px solid ${tm.color}44` }}>
+                    {tm.label}
+                  </span>
+                </div>
+
+                {/* Info bottom */}
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "8px 10px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#e2eaf5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 2 }}>
+                    {item.seg.address ? extractComune(item.seg.address) || item.seg.address : `${item.seg.lat?.toFixed(4)}, ${item.seg.lng?.toFixed(4)}`}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "rgba(226,234,245,0.55)" }}>
+                    <span>{item.done_by_name}</span>
+                    <span>{formatSegDate(item.done_at)}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {lbItem && (
+        <Lightbox
+          item={lbItem}
+          onClose={() => setLightboxIdx(null)}
+          onPrev={() => setLightboxIdx(i => i - 1)}
+          onNext={() => setLightboxIdx(i => i + 1)}
+          hasPrev={lightboxIdx > 0}
+          hasNext={lightboxIdx < filtered.length - 1}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── TerritorioDetail (unchanged) ──────────────────────────────────────────────
 function TerritorioDetail({ segnalazione: s, auth, onClose, onRefresh }) {
   const [status,        setStatus]        = useState(s.status);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -169,12 +372,9 @@ function TerritorioDetail({ segnalazione: s, auth, onClose, onRefresh }) {
   );
 }
 
-export default function TerritorioModule() {
-  const { auth }  = useAuth();
-  const isMobile  = useIsMobile();
-  const { data, refetch } = useApi("/segnalazioni-territorio");
-  const segnalazioni = data || [];
-
+// ── SegnalazioniTab (existing list view) ──────────────────────────────────────
+function SegnalazioniTab({ segnalazioni, auth, refetch }) {
+  const isMobile   = useIsMobile();
   const [filterTipo,   setFilterTipo]   = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterComune, setFilterComune] = useState("all");
@@ -200,26 +400,8 @@ export default function TerritorioModule() {
 
   const selectedFull = selected ? (segnalazioni.find(s => s.id === selected.id) || selected) : null;
 
-  const statCounts = Object.fromEntries(
-    Object.keys(TERR_STATUS).map(k => [k, segnalazioni.filter(s => s.status === k).length])
-  );
-
   return (
-    <div style={{ fontFamily: T.font, color: T.text }}>
-      <div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: T.text, marginBottom: 6 }}>Segnalazioni Territorio</div>
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-            {Object.entries(TERR_STATUS).map(([k, v]) => (
-              <div key={k} style={{ fontSize: 12, color: v.color, fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: v.color, display: "inline-block" }} />
-                {statCounts[k]} {v.label.toLowerCase()}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
+    <div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca indirizzo o nota…"
           style={{ width: "100%", background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 8, color: T.text, padding: "9px 14px", fontSize: 13, fontFamily: T.font, outline: "none", boxSizing: "border-box" }} />
@@ -294,6 +476,57 @@ export default function TerritorioModule() {
           onClose={() => setSelected(null)}
           onRefresh={refetch}
         />
+      )}
+    </div>
+  );
+}
+
+// ── Main module ───────────────────────────────────────────────────────────────
+const TABS = [
+  { id: "segnalazioni", label: "Segnalazioni", icon: "M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z M12 9v4 M12 17h.01" },
+  { id: "galleria",     label: "Galleria",     icon: "M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8" },
+];
+
+export default function TerritorioModule() {
+  const { auth }  = useAuth();
+  const { data, refetch } = useApi("/segnalazioni-territorio");
+  const segnalazioni = data || [];
+  const [activeTab, setActiveTab] = useState("segnalazioni");
+
+  const statCounts = Object.fromEntries(
+    Object.keys(TERR_STATUS).map(k => [k, segnalazioni.filter(s => s.status === k).length])
+  );
+
+  const photoCount = segnalazioni.reduce((n, s) => n + (s.interventions || []).filter(i => i.photo_url).length, 0);
+
+  const tabs = TABS.map(t =>
+    t.id === "galleria" ? { ...t, badge: photoCount } : t
+  );
+
+  return (
+    <div style={{ fontFamily: T.font, color: T.text }}>
+      {/* Header */}
+      <div style={{ marginBottom: 16, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: T.text, marginBottom: 6 }}>Segnalazioni Territorio</div>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            {Object.entries(TERR_STATUS).map(([k, v]) => (
+              <div key={k} style={{ fontSize: 12, color: v.color, fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: v.color, display: "inline-block" }} />
+                {statCounts[k]} {v.label.toLowerCase()}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <TabBar tabs={tabs} active={activeTab} onChange={setActiveTab} />
+
+      {activeTab === "segnalazioni" && (
+        <SegnalazioniTab segnalazioni={segnalazioni} auth={auth} refetch={refetch} />
+      )}
+      {activeTab === "galleria" && (
+        <GalleriaTab segnalazioni={segnalazioni} />
       )}
     </div>
   );

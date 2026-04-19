@@ -20,10 +20,12 @@ const authCoreController = {
    */
   async login(req, res, next) {
     try {
-      const { ms_token, email, password } = req.body;
+      // Accept both ms_token (new) and id_token (legacy frontend field name)
+      const { ms_token, id_token, email, password } = req.body;
+      const msToken = ms_token || id_token;
 
-      const result = ms_token
-        ? await authCoreService.loginWithMicrosoft(ms_token)
+      const result = msToken
+        ? await authCoreService.loginWithMicrosoft(msToken)
         : await authCoreService.loginWithPassword(email, password);
 
       res.json({ ok: true, ...result });

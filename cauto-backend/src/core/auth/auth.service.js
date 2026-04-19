@@ -16,6 +16,7 @@ const { AppError }       = require("../../middleware/errorHandler");
 const jwtService         = require("./jwt.service");
 const { validateMsalToken } = require("./msal.validator");
 const userRepo           = require("../../repositories/userRepository");
+const tenantRepo         = require("../../repositories/tenantRepository");
 
 /** Fields safe to return to the client */
 function publicUser(user) {
@@ -25,6 +26,17 @@ function publicUser(user) {
     email:    user.email,
     role:     user.role,
     tenantId: user.tenant_id,
+  };
+}
+
+/** Build the tenant object to return to the client — includes modules so the
+ *  frontend can gate features without an extra round-trip. */
+function publicTenant(tenantId) {
+  const t = tenantRepo.findById(tenantId);
+  return {
+    id:      tenantId,
+    name:    t?.name    || "",
+    modules: t?.modules || {},
   };
 }
 
@@ -75,7 +87,7 @@ const authCoreService = {
     if (!user.active) throw new AppError("Account disattivato", 403);
 
     const token = jwtService.sign(user);
-    return { token, user: publicUser(user), tenant: { id: user.tenant_id } };
+    return { token, user: publicUser(user), tenant: publicTenant(user.tenant_id) };
   },
 
   /**
@@ -92,7 +104,7 @@ const authCoreService = {
     if (!valid) throw new AppError("Credenziali non valide", 401);
 
     const token = jwtService.sign(user);
-    return { token, user: publicUser(user), tenant: { id: user.tenant_id } };
+    return { token, user: publicUser(user), tenant: publicTenant(user.tenant_id) };
   },
 
   /**
@@ -100,7 +112,7 @@ const authCoreService = {
    * `user` is the full record attached by requireAuth.
    */
   getMe(user) {
-    return { user: publicUser(user), tenant: { id: user.tenant_id } };
+    return { user: publicUser(user), tenant: publicTenant(user.tenant_id) };
   },
 };
 

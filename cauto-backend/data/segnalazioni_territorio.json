@@ -1,0 +1,123 @@
+{
+  "nextId": 6,
+  "nextIntId": 9,
+  "segnalazioni": [
+    {
+      "id": "st1",
+      "tipo": "abbandono",
+      "note": "Cumulo di rifiuti ingombranti abbandonati sul lato della strada",
+      "address": "Via Roma 42, Mori, Trento",
+      "lat": 45.8542,
+      "lng": 11.0021,
+      "status": "chiusa",
+      "created_by": "u2",
+      "created_by_name": "Marco Bianchi",
+      "created_at": "2026-04-10T08:14:00.000Z",
+      "interventions": [
+        {
+          "id": "int1",
+          "note": "Rifiuti rimossi e area ripulita",
+          "photo_url": "https://picsum.photos/seed/int1/800/600",
+          "done_by": "u3",
+          "done_by_name": "Luca Ferretti",
+          "done_at": "2026-04-11T09:30:00.000Z"
+        },
+        {
+          "id": "int2",
+          "note": "Zona sanificata e segnaletica installata",
+          "photo_url": "https://picsum.photos/seed/int2/800/600",
+          "done_by": "u3",
+          "done_by_name": "Luca Ferretti",
+          "done_at": "2026-04-11T14:15:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "st2",
+      "tipo": "mancata_raccolta",
+      "note": "Cassonetti non svuotati da oltre 5 giorni",
+      "address": "Piazza del Municipio 1, Rovereto, Trento",
+      "lat": 45.8902,
+      "lng": 11.0445,
+      "status": "chiusa",
+      "created_by": "u2",
+      "created_by_name": "Marco Bianchi",
+      "created_at": "2026-04-12T11:00:00.000Z",
+      "interventions": [
+        {
+          "id": "int3",
+          "note": "Raccolta effettuata, cassonetti svuotati",
+          "photo_url": "https://picsum.photos/seed/int3/800/600",
+          "done_by": "u4",
+          "done_by_name": "Sara Martini",
+          "done_at": "2026-04-13T07:45:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "st3",
+      "tipo": "da_pulire",
+      "note": "Graffiti su muro e rifiuti attorno alle panchine del parco",
+      "address": "Parco Garibaldi, Ala, Trento",
+      "lat": 45.7598,
+      "lng": 11.0036,
+      "status": "in_lavorazione",
+      "created_by": "u2",
+      "created_by_name": "Marco Bianchi",
+      "created_at": "2026-04-14T16:22:00.000Z",
+      "interventions": [
+        {
+          "id": "int4",
+          "note": "Prima pulizia effettuata, graffiti ancora presenti",
+          "photo_url": "https://picsum.photos/seed/int4/800/600",
+          "done_by": "u3",
+          "done_by_name": "Luca Ferretti",
+          "done_at": "2026-04-15T10:00:00.000Z"
+        },
+        {
+          "id": "int5",
+          "note": "Intervento graffiti programmato per domani",
+          "photo_url": null,
+          "done_by": "u2",
+          "done_by_name": "Marco Bianchi",
+          "done_at": "2026-04-16T09:10:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "st4",
+      "tipo": "abbandono",
+      "note": "Pneumatici abbandonati nel parcheggio del centro commerciale",
+      "address": "Via Industria 18, Besenello, Trento",
+      "lat": 45.9231,
+      "lng": 11.1002,
+      "status": "in_lavorazione",
+      "created_by": "u4",
+      "created_by_name": "Sara Martini",
+      "created_at": "2026-04-16T14:05:00.000Z",
+      "interventions": [
+        {
+          "id": "int6",
+          "note": "Sopralluogo effettuato, rimozione pianificata per giovedì",
+          "photo_url": "https://picsum.photos/seed/int6/800/600",
+          "done_by": "u4",
+          "done_by_name": "Sara Martini",
+          "done_at": "2026-04-17T08:30:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "st5",
+      "tipo": "mancata_raccolta",
+      "note": "Bidoni della carta non ritirati dall'inizio della settimana",
+      "address": "Corso Rosmini 55, Rovereto, Trento",
+      "lat": 45.8871,
+      "lng": 11.0389,
+      "status": "aperta",
+      "created_by": "u2",
+      "created_by_name": "Marco Bianchi",
+      "created_at": "2026-04-18T09:45:00.000Z",
+      "interventions": []
+    }
+  ]
+}

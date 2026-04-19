@@ -113,10 +113,11 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
   const streamRef = useRef(null);
 
   // Core
-  const [status,        setStatus]        = useState("starting");
-  const [errMsg,        setErrMsg]        = useState("");
-  const [address,       setAddress]       = useState(null);
-  const [busy,          setBusy]          = useState(false);
+  const [status,          setStatus]          = useState("starting");
+  const [errMsg,          setErrMsg]          = useState("");
+  const [address,         setAddress]         = useState(null);
+  const [busy,            setBusy]            = useState(false);
+  const [videoNeedsRotate, setVideoNeedsRotate] = useState(false);
 
   // Captured photo
   const [capturedBlob, setCapturedBlob] = useState(null);
@@ -148,7 +149,15 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
         });
         if (cancelled) { s.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = s;
-        if (videoRef.current) { videoRef.current.srcObject = s; videoRef.current.play().catch(() => {}); }
+        if (videoRef.current) {
+          videoRef.current.srcObject = s;
+          videoRef.current.addEventListener("loadedmetadata", () => {
+            const vw = videoRef.current?.videoWidth  || 0;
+            const vh = videoRef.current?.videoHeight || 0;
+            setVideoNeedsRotate(window.innerHeight > window.innerWidth && vw > vh);
+          }, { once: true });
+          videoRef.current.play().catch(() => {});
+        }
         setStatus("viewfinder");
       } catch { if (!cancelled) setStatus("fallback"); }
     }
@@ -363,11 +372,23 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
         onChange={handleFallbackFile} style={{ display: "none" }} />
 
       {/* Live video (background) */}
+      {/* When the camera sensor outputs landscape frames on a portrait screen,
+          we rotate the video element -90° via CSS so the viewfinder matches
+          what drawVideoToCanvas() will produce on capture. */}
       <video ref={videoRef} autoPlay playsInline muted
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%",
-          objectFit: "cover",
+        style={{
+          position: "absolute", objectFit: "cover", pointerEvents: "none",
+          ...(videoNeedsRotate
+            ? {
+                /* Swap width/height so the rotated video fills the portrait screen */
+                width: "100vh", height: "100vw",
+                top: "50%", left: "50%",
+                transform: "translate(-50%, -50%) rotate(-90deg)",
+              }
+            : { inset: 0, width: "100%", height: "100%" }),
           opacity: status === "viewfinder" ? 1 : status === "capturing" ? 0.4 : 0,
-          transition: "opacity 0.2s", pointerEvents: "none" }} />
+          transition: "opacity 0.2s",
+        }} />
 
       {/* ── STARTING ── */}
       {status === "starting" && (

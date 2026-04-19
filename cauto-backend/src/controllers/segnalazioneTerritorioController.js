@@ -1,16 +1,10 @@
 const path    = require("path");
 const multer  = require("multer");
 const segnalazioneTerritorioService = require("../services/segnalazioneTerritorioService");
+const { makeCloudinaryStorage, photoUrl } = require("../utils/cloudinary");
 
-const photoStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, path.join(__dirname, "../../uploads")),
-  filename:    (_req, _file, cb) => {
-    const ext = path.extname(_file.originalname).toLowerCase();
-    cb(null, `seg_int_${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
 const upload = multer({
-  storage:    photoStorage,
+  storage:    makeCloudinaryStorage("fleetcc/territorio", "seg_int"),
   limits:     { fileSize: 15 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = [".jpg", ".jpeg", ".png", ".webp", ".heic"];
@@ -43,10 +37,10 @@ const segnalazioneTerritorioController = {
     upload.single("photo"),
     (req, res, next) => {
       try {
-        const photoUrl = req.file ? `/uploads/${req.file.filename}` : null;
-        const updated  = segnalazioneTerritorioService.addIntervention(
+        const photo_url = req.file ? photoUrl(req.file) : null;
+        const updated   = segnalazioneTerritorioService.addIntervention(
           req.params.id,
-          { ...req.body, photo_url: photoUrl },
+          { ...req.body, photo_url },
           req.user,
         );
         res.status(201).json({ ok: true, data: updated });

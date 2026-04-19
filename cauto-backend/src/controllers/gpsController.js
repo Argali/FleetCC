@@ -1,20 +1,18 @@
-const path       = require("path");
 const multer     = require("multer");
 const gpsService = require("../services/gpsService");
+const { makeCloudinaryStorage, photoUrl } = require("../utils/cloudinary");
 
-// Excel import — memory storage
+// Excel import — memory storage (never goes to Cloudinary)
 const memUpload = multer({
   storage: multer.memoryStorage(),
   limits:  { fileSize: 10 * 1024 * 1024 },
 });
 
-// Stamped photo — disk storage
-const photoStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, path.join(__dirname, "../../uploads")),
-  filename:    (_req, _file, cb) =>
-    cb(null, `gps_photo_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`),
+// Stamped photo — Cloudinary in production, local disk in dev
+const photoUpload = multer({
+  storage: makeCloudinaryStorage("fleetcc/gps", "gps_photo"),
+  limits:  { fileSize: 15 * 1024 * 1024 },
 });
-const photoUpload = multer({ storage: photoStorage, limits: { fileSize: 15 * 1024 * 1024 } });
 
 const gpsController = {
   async getVehicles(req, res, next) {
@@ -95,7 +93,7 @@ const gpsController = {
         if (!req.file) { res.status(400).json({ ok: false, error: "Nessuna foto ricevuta" }); return; }
         next();
       }),
-    (req, res) => res.status(201).json({ ok: true, url: `/uploads/${req.file.filename}` }),
+    (req, res) => res.status(201).json({ ok: true, url: photoUrl(req.file) }),
   ],
 
   postDriverLocation(req, res, next) {

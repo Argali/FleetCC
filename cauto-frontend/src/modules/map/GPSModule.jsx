@@ -1857,7 +1857,7 @@ function GPSModule({onSelectVehicle,mode="live"}){
           </div>
         </div>
       )}
-      {showCamera&&<LiveCamera position={myPos} auth={auth} onClose={()=>setShowCamera(false)}/>}
+      {showCamera&&<LiveCamera position={myPos} auth={auth} mode="segnalazione" onClose={()=>setShowCamera(false)}/>}
     </div>
   );
 }

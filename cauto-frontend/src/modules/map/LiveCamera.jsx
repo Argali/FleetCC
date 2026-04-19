@@ -93,10 +93,10 @@ function TipoList({ tipos, value, onChange }) {
   );
 }
 
-function NoteField({ value, onChange, placeholder, required, tipo }) {
+function NoteField({ name = "note", value, onChange, placeholder, required }) {
   const empty = !value.trim();
   return (
-    <textarea value={value} onChange={e => onChange(e.target.value)} rows={3}
+    <textarea id={name} name={name} value={value} onChange={e => onChange(e.target.value)} rows={3}
       placeholder={placeholder}
       style={{ width: "100%", background: "rgba(255,255,255,0.06)",
         border: `1px solid ${required && empty ? "#f8717166" : "rgba(255,255,255,0.12)"}`,
@@ -352,7 +352,8 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
     <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 2000,
       display: "flex", flexDirection: "column", fontFamily: T.font }}>
       <canvas ref={canvasRef} style={{ display: "none" }} />
-      <input ref={fileRef} type="file" accept="image/*" capture="environment"
+      <input ref={fileRef} id="camera-file-input" name="camera-file-input"
+        type="file" accept="image/*" capture="environment"
         onChange={handleFallbackFile} style={{ display: "none" }} />
 
       {/* Live video (background) */}
@@ -515,7 +516,7 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
                 sub={address || (position ? `${position[0].toFixed(5)}, ${position[1].toFixed(5)}` : "Posizione non disponibile")} />
               <TipoList tipos={TIPO_TERR} value={tipo} onChange={v => { setTipo(v); setFormErr(null); }} />
               {tipo && (
-                <NoteField value={note} onChange={setNote}
+                <NoteField name="note-territorio" value={note} onChange={setNote}
                   placeholder={tipo === "altro" ? "Descrivi il problema (obbligatorio)…" : "Note aggiuntive (opzionale)…"}
                   required={tipo === "altro"} />
               )}
@@ -557,7 +558,7 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
               )}
               {selVeh && (<>
                 <TipoList tipos={TIPO_TRUCK} value={tipo} onChange={v => { setTipo(v); setFormErr(null); }} />
-                <NoteField value={note} onChange={setNote}
+                <NoteField name="note-truck" value={note} onChange={setNote}
                   placeholder="Descrivi il problema (obbligatorio)…" required />
               </>)}
             </>)}
@@ -565,7 +566,7 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
             {/* ── COMMENT form ── */}
             {action === "comment" && (<>
               <SectionTitle icon="💬" title="Foto con commento" sub="La foto verrà salvata nel modulo GPS" />
-              <NoteField value={note} onChange={setNote} placeholder="Aggiungi una nota (opzionale)…" />
+              <NoteField name="note-comment" value={note} onChange={setNote} placeholder="Aggiungi una nota (opzionale)…" />
             </>)}
 
             {/* Error */}

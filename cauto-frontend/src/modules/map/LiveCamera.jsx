@@ -113,21 +113,22 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
   const streamRef = useRef(null);
 
   // Core
-  const [status,   setStatus]   = useState("starting");
-  const [errMsg,   setErrMsg]   = useState("");
-  const [address,  setAddress]  = useState(null);
-  const [busy,     setBusy]     = useState(false);
+  const [status,        setStatus]        = useState("starting");
+  const [errMsg,        setErrMsg]        = useState("");
+  const [address,       setAddress]       = useState(null);
+  const [busy,          setBusy]          = useState(false);
 
   // Captured photo
   const [capturedBlob, setCapturedBlob] = useState(null);
   const [previewUrl,   setPreviewUrl]   = useState(null);
 
   // Form
-  const [action,   setAction]   = useState(null);   // "territorio"|"truck"|"comment"
-  const [tipo,     setTipo]     = useState("");
-  const [note,     setNote]     = useState("");
-  const [selVeh,   setSelVeh]   = useState(null);
-  const [formErr,  setFormErr]  = useState(null);
+  const [action,        setAction]        = useState(null);   // "territorio"|"truck"|"comment"
+  const [tipo,          setTipo]          = useState("");
+  const [note,          setNote]          = useState("");
+  const [manualAddress, setManualAddress] = useState("");     // fallback when GPS unavailable
+  const [selVeh,        setSelVeh]        = useState(null);
+  const [formErr,       setFormErr]       = useState(null);
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -250,7 +251,7 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
   function retake() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null); setCapturedBlob(null);
-    setAction(null); setTipo(""); setNote(""); setSelVeh(null); setFormErr(null);
+    setAction(null); setTipo(""); setNote(""); setManualAddress(""); setSelVeh(null); setFormErr(null);
     setStatus("viewfinder");
   }
 
@@ -258,12 +259,17 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
   async function uploadTerritorio(blob) {
     if (!tipo) { setFormErr("Seleziona un tipo"); return; }
     if (tipo === "altro" && !note.trim()) { setFormErr("Nota obbligatoria per 'Altro'"); return; }
+    const resolvedAddress = address || manualAddress.trim() || null;
+    if (!resolvedAddress && position == null) {
+      setFormErr("Inserisci un indirizzo oppure attiva il GPS"); return;
+    }
     setBusy(true); setFormErr(null);
     try {
       const r1 = await fetch(`${API}/segnalazioni-territorio`, {
         method: "POST",
         headers: { Authorization: `Bearer ${auth.token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ tipo, note: note.trim() || null, address: address || null,
+        body: JSON.stringify({ tipo, note: note.trim() || null,
+          address: resolvedAddress,
           lat: position?.[0] ?? null, lng: position?.[1] ?? null }),
       });
       const d1 = await r1.json();
@@ -514,6 +520,25 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
             {action === "territorio" && (<>
               <SectionTitle icon="📋" title="Segnalazione territorio"
                 sub={address || (position ? `${position[0].toFixed(5)}, ${position[1].toFixed(5)}` : "Posizione non disponibile")} />
+
+              {/* Manual address input when GPS not available */}
+              {!address && !position && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label htmlFor="manual-address"
+                    style={{ fontSize: 11, color: "#fb923c", fontWeight: 600 }}>
+                    ⚠ GPS non attivo — inserisci l'indirizzo manualmente
+                  </label>
+                  <input id="manual-address" name="manual-address"
+                    value={manualAddress}
+                    onChange={e => { setManualAddress(e.target.value); setFormErr(null); }}
+                    placeholder="Es. Via Roma 12, Mori, Trento"
+                    style={{ width: "100%", background: "rgba(255,255,255,0.06)",
+                      border: `1px solid ${!manualAddress.trim() ? "rgba(251,146,60,0.5)" : "rgba(255,255,255,0.18)"}`,
+                      borderRadius: 8, color: "#e2eaf5", padding: "9px 12px", fontSize: 13,
+                      fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+                </div>
+              )}
+
               <TipoList tipos={TIPO_TERR} value={tipo} onChange={v => { setTipo(v); setFormErr(null); }} />
               {tipo && (
                 <NoteField name="note-territorio" value={note} onChange={setNote}

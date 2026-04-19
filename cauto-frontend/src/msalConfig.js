@@ -8,7 +8,8 @@ const msalConfig = {
     redirectUri: (window.location.origin + (import.meta.env.BASE_URL || "/")).replace(/\/$/, ""),
   },
   cache: {
-    cacheLocation: "sessionStorage",
+    cacheLocation:          "sessionStorage",
+    storeAuthStateInCookie: true, // Firefox ETP fix — cookie fallback when sessionStorage is blocked
   },
 };
 

@@ -160,29 +160,46 @@ export default function LiveCamera({ position, auth, onClose }) {
     const file = e.target.files?.[0];
     if (!file) return;
     setStatus("uploading");
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = async () => {
+
+    try {
       const canvas = canvasRef.current;
-      canvas.width  = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
-      drawStamp(canvas, ctx, buildStampData());
-      URL.revokeObjectURL(url);
+      const ctx    = canvas.getContext("2d");
+
+      // createImageBitmap with imageOrientation:"from-image" respects the EXIF
+      // rotation tag so portrait photos from the camera app are not drawn sideways.
+      // Falls back to HTMLImageElement for older browsers (Chrome 79+, Safari 15.4+,
+      // Firefox 90+ all support the imageOrientation option natively).
+      let source;
       try {
-        await new Promise((resolve, reject) =>
-          canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas vuoto")), "image/jpeg", 0.92)
-        ).then(blob => uploadBlob(blob));
-        setStatus("done");
-        setTimeout(onClose, 1400);
-      } catch (err) {
-        setErrMsg(err.message || "Errore upload");
-        setStatus("error");
+        source = await createImageBitmap(file, { imageOrientation: "from-image" });
+      } catch {
+        // Fallback: Image element (modern browsers also respect EXIF here)
+        const url = URL.createObjectURL(file);
+        source = await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload  = () => { URL.revokeObjectURL(url); resolve(img); };
+          img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Impossibile leggere la foto")); };
+          img.src = url;
+        });
       }
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); setErrMsg("Impossibile leggere la foto"); setStatus("error"); };
-    img.src = url;
+
+      canvas.width  = source.width  ?? source.naturalWidth;
+      canvas.height = source.height ?? source.naturalHeight;
+      ctx.drawImage(source, 0, 0);
+      if (source.close) source.close(); // free ImageBitmap memory
+
+      drawStamp(canvas, ctx, buildStampData());
+
+      const blob = await new Promise((resolve, reject) =>
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error("Canvas vuoto")), "image/jpeg", 0.92)
+      );
+      await uploadBlob(blob);
+      setStatus("done");
+      setTimeout(onClose, 1400);
+    } catch (err) {
+      setErrMsg(err.message || "Errore upload");
+      setStatus("error");
+    }
   }
 
   const isBusy = status === "capturing" || status === "uploading";

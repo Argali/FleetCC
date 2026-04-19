@@ -34,22 +34,9 @@ jobs:
         working-directory: cauto-frontend
         run: npm test
 
-      - name: Install Playwright browsers
-        working-directory: cauto-frontend
-        run: npx playwright install --with-deps chromium
-
-      - name: E2E tests
-        working-directory: cauto-frontend
-        env:
-          VITE_API_URL: http://localhost:3001/api
-        run: npm run test:e2e --project=chromium
-
-      - name: Upload test report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: cauto-frontend/playwright-report/
+      # E2E tests require a live backend (port 3001) which is not available in CI.
+      # Run them locally with: npm run test:e2e
+      # They are skipped here to keep the CI gate fast and reliable.
 
   build-and-deploy:
     needs: test

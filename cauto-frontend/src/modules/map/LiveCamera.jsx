@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { API } from "@/api";
 import T, { alpha } from "@/theme";
 import { reverseGeocode } from "@/utils/geoUtils";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 const APP_VERSION = "0.1.0";
 
@@ -56,34 +57,38 @@ function drawStamp(canvas, ctx, stamp) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function Btn({ children, color = T.blue, onClick, disabled, style = {} }) {
+function Btn({ children, color = T.blue, onClick, disabled, style = {}, scale = 1 }) {
+  const p = v => Math.round(v * scale);
   return (
     <button onClick={onClick} disabled={disabled}
-      style={{ padding: "11px 18px", borderRadius: 10, border: `1px solid ${color}66`,
+      style={{ padding: `${p(11)}px ${p(18)}px`, borderRadius: p(10),
+        border: `1px solid ${color}66`,
         background: `${color}18`, color, cursor: disabled ? "not-allowed" : "pointer",
-        fontSize: 13, fontFamily: T.font, fontWeight: 700, display: "flex",
-        alignItems: "center", justifyContent: "center", gap: 7,
+        fontSize: p(13), fontFamily: T.font, fontWeight: 700, display: "flex",
+        alignItems: "center", justifyContent: "center", gap: p(7),
         opacity: disabled ? 0.5 : 1, transition: "all 0.15s", ...style }}>
       {children}
     </button>
   );
 }
 
-function TipoList({ tipos, value, onChange }) {
+function TipoList({ tipos, value, onChange, scale = 1 }) {
+  const p = v => Math.round(v * scale);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: p(6) }}>
       {tipos.map(({ id, label, color }) => {
         const on = value === id;
         return (
           <button key={id} onClick={() => onChange(id)}
-            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-              borderRadius: 10, border: `1px solid ${on ? color+"88" : "rgba(255,255,255,0.1)"}`,
+            style={{ display: "flex", alignItems: "center", gap: p(10),
+              padding: `${p(10)}px ${p(14)}px`,
+              borderRadius: p(10), border: `1px solid ${on ? color+"88" : "rgba(255,255,255,0.1)"}`,
               background: on ? color+"18" : "rgba(255,255,255,0.04)", cursor: "pointer",
               textAlign: "left", fontFamily: T.font, transition: "all 0.12s" }}>
-            <div style={{ width: 13, height: 13, borderRadius: "50%",
+            <div style={{ width: p(13), height: p(13), borderRadius: "50%",
               border: `2px solid ${on ? color : "rgba(255,255,255,0.3)"}`,
               background: on ? color : "transparent", flexShrink: 0, transition: "all 0.12s" }} />
-            <span style={{ fontSize: 13, color: on ? color : "rgba(226,234,245,0.75)", fontWeight: on ? 700 : 400 }}>
+            <span style={{ fontSize: p(13), color: on ? color : "rgba(226,234,245,0.75)", fontWeight: on ? 700 : 400 }}>
               {label}
             </span>
           </button>
@@ -93,14 +98,15 @@ function TipoList({ tipos, value, onChange }) {
   );
 }
 
-function NoteField({ name = "note", value, onChange, placeholder, required }) {
+function NoteField({ name = "note", value, onChange, placeholder, required, scale = 1 }) {
+  const p = v => Math.round(v * scale);
   const empty = !value.trim();
   return (
     <textarea id={name} name={name} value={value} onChange={e => onChange(e.target.value)} rows={3}
       placeholder={placeholder}
       style={{ width: "100%", background: "rgba(255,255,255,0.06)",
         border: `1px solid ${required && empty ? "#f8717166" : "rgba(255,255,255,0.12)"}`,
-        borderRadius: 8, color: "#e2eaf5", padding: "9px 12px", fontSize: 13,
+        borderRadius: p(8), color: "#e2eaf5", padding: `${p(9)}px ${p(12)}px`, fontSize: p(13),
         fontFamily: T.font, resize: "vertical", outline: "none", boxSizing: "border-box" }} />
   );
 }
@@ -111,6 +117,11 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
   const canvasRef = useRef(null);
   const fileRef   = useRef(null);
   const streamRef = useRef(null);
+
+  const isMobile = useIsMobile();
+  /** Scale helper: multiplies any pixel value by 1.5 on mobile */
+  const s  = v => isMobile ? Math.round(v * 1.5) : v;
+  const sc = isMobile ? 1.5 : 1;   // prop to pass to sub-components
 
   // Core
   const [status,          setStatus]          = useState("starting");
@@ -349,13 +360,14 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
 
   // ── Section header ────────────────────────────────────────────────────────
   const SectionTitle = ({ icon, title, sub }) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-      <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(96,165,250,0.15)",
-        border: "1px solid rgba(96,165,250,0.3)", display: "flex", alignItems: "center",
-        justifyContent: "center", flexShrink: 0, fontSize: 15 }}>{icon}</div>
+    <div style={{ display: "flex", alignItems: "center", gap: s(10), marginBottom: s(16) }}>
+      <div style={{ width: s(30), height: s(30), borderRadius: s(8),
+        background: "rgba(96,165,250,0.15)", border: "1px solid rgba(96,165,250,0.3)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexShrink: 0, fontSize: s(15) }}>{icon}</div>
       <div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#e2eaf5" }}>{title}</div>
-        {sub && <div style={{ fontSize: 11, color: "rgba(226,234,245,0.45)" }}>{sub}</div>}
+        <div style={{ fontSize: s(14), fontWeight: 700, color: "#e2eaf5" }}>{title}</div>
+        {sub && <div style={{ fontSize: s(11), color: "rgba(226,234,245,0.45)" }}>{sub}</div>}
       </div>
     </div>
   );
@@ -448,16 +460,16 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
         <Overlay>
           <img src={previewUrl} alt="Anteprima"
             style={{ width: "100%", maxHeight: "55vh", objectFit: "contain", background: "#000", flexShrink: 0 }} />
-          <div style={{ padding: "20px 20px 32px", display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#e2eaf5" }}>Foto acquisita</div>
-            <div style={{ fontSize: 12, color: "rgba(226,234,245,0.5)", marginBottom: 4 }}>
+          <div style={{ padding: `${s(20)}px ${s(20)}px ${s(32)}px`, display: "flex", flexDirection: "column", gap: s(12) }}>
+            <div style={{ fontSize: s(14), fontWeight: 700, color: "#e2eaf5" }}>Foto acquisita</div>
+            <div style={{ fontSize: s(12), color: "rgba(226,234,245,0.5)", marginBottom: s(4) }}>
               La foto è nitida e ben orientata?
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <Btn color={T.textSub} onClick={retake} style={{ flex: 1 }}>
+            <div style={{ display: "flex", gap: s(10) }}>
+              <Btn color={T.textSub} onClick={retake} scale={sc} style={{ flex: 1 }}>
                 ← Riprova
               </Btn>
-              <Btn color={T.green} onClick={() => setStatus("choose")} style={{ flex: 2 }}>
+              <Btn color={T.green} onClick={() => setStatus("choose")} scale={sc} style={{ flex: 2 }}>
                 Continua →
               </Btn>
             </div>
@@ -470,25 +482,25 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
         <Overlay>
           {/* Small thumbnail strip */}
           {previewUrl && (
-            <div style={{ height: 80, overflow: "hidden", flexShrink: 0, position: "relative" }}>
+            <div style={{ height: s(80), overflow: "hidden", flexShrink: 0, position: "relative" }}>
               <img src={previewUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.5) blur(2px)" }} />
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: 600 }}>Foto timbrata pronta</span>
+                <span style={{ fontSize: s(11), color: "rgba(255,255,255,0.7)", fontWeight: 600 }}>Foto timbrata pronta</span>
               </div>
             </div>
           )}
-          <div style={{ padding: "20px 20px 32px", display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#e2eaf5", marginBottom: 6 }}>Cosa vuoi segnalare?</div>
+          <div style={{ padding: `${s(20)}px ${s(20)}px ${s(32)}px`, display: "flex", flexDirection: "column", gap: s(10) }}>
+            <div style={{ fontSize: s(14), fontWeight: 700, color: "#e2eaf5", marginBottom: s(6) }}>Cosa vuoi segnalare?</div>
 
             {/* Option: Territorio */}
             <button onClick={() => { setAction("territorio"); setStatus("form"); }}
-              style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px",
-                borderRadius: 12, border: "1px solid rgba(251,146,60,0.4)", background: "rgba(251,146,60,0.08)",
+              style={{ display: "flex", alignItems: "center", gap: s(14), padding: `${s(14)}px ${s(16)}px`,
+                borderRadius: s(12), border: "1px solid rgba(251,146,60,0.4)", background: "rgba(251,146,60,0.08)",
                 cursor: "pointer", textAlign: "left", fontFamily: T.font }}>
-              <span style={{ fontSize: 24, flexShrink: 0 }}>📋</span>
+              <span style={{ fontSize: s(24), flexShrink: 0 }}>📋</span>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#fb923c" }}>Segnalazione territorio</div>
-                <div style={{ fontSize: 11, color: "rgba(226,234,245,0.5)", marginTop: 2 }}>
+                <div style={{ fontSize: s(14), fontWeight: 700, color: "#fb923c" }}>Segnalazione territorio</div>
+                <div style={{ fontSize: s(11), color: "rgba(226,234,245,0.5)", marginTop: s(2) }}>
                   Abbandono, mancata raccolta, zona da pulire…
                 </div>
               </div>
@@ -496,13 +508,13 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
 
             {/* Option: Camion */}
             <button onClick={() => { setAction("truck"); setStatus("form"); }}
-              style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px",
-                borderRadius: 12, border: "1px solid rgba(96,165,250,0.4)", background: "rgba(96,165,250,0.08)",
+              style={{ display: "flex", alignItems: "center", gap: s(14), padding: `${s(14)}px ${s(16)}px`,
+                borderRadius: s(12), border: "1px solid rgba(96,165,250,0.4)", background: "rgba(96,165,250,0.08)",
                 cursor: "pointer", textAlign: "left", fontFamily: T.font }}>
-              <span style={{ fontSize: 24, flexShrink: 0 }}>🚛</span>
+              <span style={{ fontSize: s(24), flexShrink: 0 }}>🚛</span>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#60a5fa" }}>Segnalazione veicolo</div>
-                <div style={{ fontSize: 11, color: "rgba(226,234,245,0.5)", marginTop: 2 }}>
+                <div style={{ fontSize: s(14), fontWeight: 700, color: "#60a5fa" }}>Segnalazione veicolo</div>
+                <div style={{ fontSize: s(11), color: "rgba(226,234,245,0.5)", marginTop: s(2) }}>
                   Guasto, incidente, manutenzione su un mezzo…
                 </div>
               </div>
@@ -510,22 +522,22 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
 
             {/* Option: Comment only */}
             <button onClick={() => { setAction("comment"); setStatus("form"); }}
-              style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px",
-                borderRadius: 12, border: "1px solid rgba(148,163,184,0.3)", background: "rgba(148,163,184,0.06)",
+              style={{ display: "flex", alignItems: "center", gap: s(14), padding: `${s(14)}px ${s(16)}px`,
+                borderRadius: s(12), border: "1px solid rgba(148,163,184,0.3)", background: "rgba(148,163,184,0.06)",
                 cursor: "pointer", textAlign: "left", fontFamily: T.font }}>
-              <span style={{ fontSize: 24, flexShrink: 0 }}>💬</span>
+              <span style={{ fontSize: s(24), flexShrink: 0 }}>💬</span>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#94a3b8" }}>Solo foto / commento</div>
-                <div style={{ fontSize: 11, color: "rgba(226,234,245,0.5)", marginTop: 2 }}>
+                <div style={{ fontSize: s(14), fontWeight: 700, color: "#94a3b8" }}>Solo foto / commento</div>
+                <div style={{ fontSize: s(11), color: "rgba(226,234,245,0.5)", marginTop: s(2) }}>
                   Salva la foto con una nota, senza aprire una segnalazione
                 </div>
               </div>
             </button>
 
             <button onClick={() => setStatus("preview")}
-              style={{ marginTop: 4, padding: "9px", background: "transparent",
-                border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8,
-                color: "rgba(226,234,245,0.4)", cursor: "pointer", fontSize: 12, fontFamily: T.font }}>
+              style={{ marginTop: s(4), padding: `${s(9)}px`, background: "transparent",
+                border: "1px solid rgba(255,255,255,0.1)", borderRadius: s(8),
+                color: "rgba(226,234,245,0.4)", cursor: "pointer", fontSize: s(12), fontFamily: T.font }}>
               ← Torna all'anteprima
             </button>
           </div>
@@ -535,7 +547,7 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
       {/* ── FORM (depends on action) ── */}
       {status === "form" && (
         <Overlay>
-          <div style={{ padding: "20px 20px 36px", display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
+          <div style={{ padding: `${s(20)}px ${s(20)}px ${s(36)}px`, display: "flex", flexDirection: "column", gap: s(14), flex: 1 }}>
 
             {/* ── TERRITORIO form ── */}
             {action === "territorio" && (<>
@@ -544,9 +556,9 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
 
               {/* Manual address input when GPS not available */}
               {!address && !position && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: s(4) }}>
                   <label htmlFor="manual-address"
-                    style={{ fontSize: 11, color: "#fb923c", fontWeight: 600 }}>
+                    style={{ fontSize: s(11), color: "#fb923c", fontWeight: 600 }}>
                     ⚠ GPS non attivo — inserisci l'indirizzo manualmente
                   </label>
                   <input id="manual-address" name="manual-address"
@@ -555,16 +567,16 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
                     placeholder="Es. Via Roma 12, Mori, Trento"
                     style={{ width: "100%", background: "rgba(255,255,255,0.06)",
                       border: `1px solid ${!manualAddress.trim() ? "rgba(251,146,60,0.5)" : "rgba(255,255,255,0.18)"}`,
-                      borderRadius: 8, color: "#e2eaf5", padding: "9px 12px", fontSize: 13,
+                      borderRadius: s(8), color: "#e2eaf5", padding: `${s(9)}px ${s(12)}px`, fontSize: s(13),
                       fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
                 </div>
               )}
 
-              <TipoList tipos={TIPO_TERR} value={tipo} onChange={v => { setTipo(v); setFormErr(null); }} />
+              <TipoList tipos={TIPO_TERR} value={tipo} onChange={v => { setTipo(v); setFormErr(null); }} scale={sc} />
               {tipo && (
                 <NoteField name="note-territorio" value={note} onChange={setNote}
                   placeholder={tipo === "altro" ? "Descrivi il problema (obbligatorio)…" : "Note aggiuntive (opzionale)…"}
-                  required={tipo === "altro"} />
+                  required={tipo === "altro"} scale={sc} />
               )}
             </>)}
 
@@ -572,28 +584,29 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
             {action === "truck" && (<>
               <SectionTitle icon="🚛" title="Segnalazione veicolo" sub="Seleziona il mezzo interessato" />
               {vehicles.length === 0 ? (
-                <div style={{ padding: 16, borderRadius: 10, background: "rgba(255,255,255,0.04)",
-                  color: "rgba(226,234,245,0.4)", fontSize: 13, textAlign: "center" }}>
+                <div style={{ padding: s(16), borderRadius: s(10), background: "rgba(255,255,255,0.04)",
+                  color: "rgba(226,234,245,0.4)", fontSize: s(13), textAlign: "center" }}>
                   Nessun veicolo disponibile
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: "28vh", overflowY: "auto" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: s(6), maxHeight: "28vh", overflowY: "auto" }}>
                   {vehicles.map(v => {
                     const on = selVeh?.id === v.id;
                     return (
                       <button key={v.id} onClick={() => { setSelVeh(v); setFormErr(null); }}
-                        style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-                          borderRadius: 10, border: `1px solid ${on ? "#60a5fa88" : "rgba(255,255,255,0.1)"}`,
+                        style={{ display: "flex", alignItems: "center", gap: s(10),
+                          padding: `${s(10)}px ${s(14)}px`,
+                          borderRadius: s(10), border: `1px solid ${on ? "#60a5fa88" : "rgba(255,255,255,0.1)"}`,
                           background: on ? "#60a5fa18" : "rgba(255,255,255,0.04)", cursor: "pointer",
                           textAlign: "left", fontFamily: T.font }}>
-                        <div style={{ width: 13, height: 13, borderRadius: "50%",
+                        <div style={{ width: s(13), height: s(13), borderRadius: "50%",
                           border: `2px solid ${on ? "#60a5fa" : "rgba(255,255,255,0.3)"}`,
                           background: on ? "#60a5fa" : "transparent", flexShrink: 0 }} />
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: on ? 700 : 400, color: on ? "#60a5fa" : "#e2eaf5" }}>
+                          <div style={{ fontSize: s(13), fontWeight: on ? 700 : 400, color: on ? "#60a5fa" : "#e2eaf5" }}>
                             {v.name}
                           </div>
-                          <div style={{ fontSize: 10, color: "rgba(226,234,245,0.45)" }}>
+                          <div style={{ fontSize: s(10), color: "rgba(226,234,245,0.45)" }}>
                             {v.plate}{v.sector ? ` · ${v.sector}` : ""}
                           </div>
                         </div>
@@ -603,42 +616,43 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
                 </div>
               )}
               {selVeh && (<>
-                <TipoList tipos={TIPO_TRUCK} value={tipo} onChange={v => { setTipo(v); setFormErr(null); }} />
+                <TipoList tipos={TIPO_TRUCK} value={tipo} onChange={v => { setTipo(v); setFormErr(null); }} scale={sc} />
                 <NoteField name="note-truck" value={note} onChange={setNote}
-                  placeholder="Descrivi il problema (obbligatorio)…" required />
+                  placeholder="Descrivi il problema (obbligatorio)…" required scale={sc} />
               </>)}
             </>)}
 
             {/* ── COMMENT form ── */}
             {action === "comment" && (<>
               <SectionTitle icon="💬" title="Foto con commento" sub="La foto verrà salvata nel modulo GPS" />
-              <NoteField name="note-comment" value={note} onChange={setNote} placeholder="Aggiungi una nota (opzionale)…" />
+              <NoteField name="note-comment" value={note} onChange={setNote}
+                placeholder="Aggiungi una nota (opzionale)…" scale={sc} />
             </>)}
 
             {/* Error */}
             {formErr && (
-              <div style={{ fontSize: 12, color: "#f87171", padding: "7px 10px",
-                background: "rgba(248,113,113,0.1)", borderRadius: 7,
+              <div style={{ fontSize: s(12), color: "#f87171", padding: `${s(7)}px ${s(10)}px`,
+                background: "rgba(248,113,113,0.1)", borderRadius: s(7),
                 border: "1px solid rgba(248,113,113,0.25)" }}>
                 {formErr}
               </div>
             )}
 
             {/* Actions */}
-            <div style={{ display: "flex", gap: 10, marginTop: "auto" }}>
-              <Btn color={T.textSub} onClick={() => setStatus("choose")} disabled={busy} style={{ flex: 1 }}>
+            <div style={{ display: "flex", gap: s(10), marginTop: "auto" }}>
+              <Btn color={T.textSub} onClick={() => setStatus("choose")} disabled={busy} scale={sc} style={{ flex: 1 }}>
                 ← Indietro
               </Btn>
               <Btn
                 color={action === "territorio" ? "#fb923c" : action === "truck" ? "#60a5fa" : "#94a3b8"}
-                disabled={busy}
+                disabled={busy} scale={sc}
                 onClick={() => {
                   if (action === "territorio") uploadTerritorio(capturedBlob);
                   else if (action === "truck") uploadTruck(capturedBlob);
                   else uploadComment(capturedBlob);
                 }}
                 style={{ flex: 2 }}>
-                {busy && <span style={{ display: "inline-block", width: 12, height: 12,
+                {busy && <span style={{ display: "inline-block", width: s(12), height: s(12),
                   border: "2px solid currentColor", borderTopColor: "transparent",
                   borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />}
                 {busy ? "Invio…" : "Invia"}
@@ -650,14 +664,14 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
 
       {/* ── DONE ── */}
       {status === "done" && (
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
-          <div style={{ width: 58, height: 58, borderRadius: "50%", background: "rgba(74,222,128,0.15)",
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: s(12) }}>
+          <div style={{ width: s(58), height: s(58), borderRadius: "50%", background: "rgba(74,222,128,0.15)",
             border: `2px solid ${T.green}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={T.green} strokeWidth="2.5">
+            <svg width={s(28)} height={s(28)} viewBox="0 0 24 24" fill="none" stroke={T.green} strokeWidth="2.5">
               <polyline points="20 6 9 17 4 12"/>
             </svg>
           </div>
-          <span style={{ color: T.green, fontSize: 16, fontWeight: 700 }}>
+          <span style={{ color: T.green, fontSize: s(16), fontWeight: 700 }}>
             {action === "territorio" ? "Segnalazione creata" :
              action === "truck"      ? "Segnalazione veicolo creata" : "Foto salvata"}
           </span>
@@ -666,11 +680,11 @@ export default function LiveCamera({ position, auth, vehicles = [], onClose }) {
 
       {/* ── ERROR ── */}
       {status === "error" && (
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 14, padding: 32 }}>
-          <span style={{ color: T.red, fontSize: 14, textAlign: "center" }}>{errMsg}</span>
-          <div style={{ display: "flex", gap: 10 }}>
-            <Btn color={T.textSub} onClick={retake}>← Riprendi foto</Btn>
-            <Btn color={T.red} onClick={() => setStatus("form")}>Riprova invio</Btn>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: s(14), padding: s(32) }}>
+          <span style={{ color: T.red, fontSize: s(14), textAlign: "center" }}>{errMsg}</span>
+          <div style={{ display: "flex", gap: s(10) }}>
+            <Btn color={T.textSub} onClick={retake} scale={sc}>← Riprendi foto</Btn>
+            <Btn color={T.red} onClick={() => setStatus("form")} scale={sc}>Riprova invio</Btn>
           </div>
         </div>
       )}

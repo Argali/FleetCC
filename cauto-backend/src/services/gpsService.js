@@ -255,6 +255,24 @@ const gpsService = {
     }
   },
 
+  // ── VisiRun extended endpoints (safe stubs on mock provider) ────────────────
+
+  async getHistory(plate, date) {
+    return vehicleRepo.getHistory(plate, date);
+  },
+
+  async getVehicleStops(plate, startDateTime, endDateTime) {
+    return vehicleRepo.getStops(plate, startDateTime, endDateTime);
+  },
+
+  async getFleetKpi(date) {
+    return vehicleRepo.getKpi(date);
+  },
+
+  async getFleetOdometer() {
+    return vehicleRepo.getOdometer();
+  },
+
   // ── Driver locations ───────────────────────────────────────────────────────
   setDriverLocation(userId, lat, lng, name) {
     if (lat == null || lng == null) throw new AppError("lat e lng obbligatori", 400);

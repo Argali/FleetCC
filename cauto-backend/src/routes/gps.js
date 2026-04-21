@@ -15,6 +15,12 @@ router.post  ("/routes/import-excel",  requireAuth, requirePerm("gps", "edit"), 
 router.post  ("/routes/snap-to-roads", requireAuth, ctrl.snapToRoads);
 router.post  ("/navigate",             requireAuth, ctrl.navigate);
 router.post  ("/photo",                requireAuth, ctrl.uploadPhoto);
+
+// VisiRun extended endpoints (return empty arrays on mock provider)
+router.get   ("/history/:plate",       requireAuth, requirePerm("gps", "view"), ctrl.getHistory);
+router.get   ("/stops/:plate",         requireAuth, requirePerm("gps", "view"), ctrl.getVehicleStops);
+router.get   ("/kpi",                  requireAuth, requirePerm("gps", "view"), ctrl.getFleetKpi);
+router.get   ("/odometer",             requireAuth, requirePerm("gps", "view"), ctrl.getFleetOdometer);
 router.post  ("/driver-location",      requireAuth, ctrl.postDriverLocation);
 router.delete("/driver-location",      requireAuth, ctrl.deleteDriverLocation);
 router.get   ("/driver-locations",     requireAuth, requirePerm("gps", "view"), ctrl.getDriverLocations);

@@ -96,6 +96,46 @@ const gpsController = {
     (req, res) => res.status(201).json({ ok: true, url: photoUrl(req.file) }),
   ],
 
+  // ── VisiRun extended endpoints ────────────────────────────────────────────
+
+  async getHistory(req, res, next) {
+    try {
+      const { plate } = req.params;
+      const date      = req.query.date || new Date().toISOString().slice(0, 10);
+      const data      = await gpsService.getHistory(plate, date);
+      res.json({ ok: true, data });
+    } catch (err) { next(err); }
+  },
+
+  async getVehicleStops(req, res, next) {
+    try {
+      const { plate } = req.params;
+      const start     = req.query.start;
+      const end       = req.query.end;
+      if (!start || !end) {
+        res.status(400).json({ ok: false, error: "start e end obbligatori (yyyy-mm-dd hh:mm:ss)" });
+        return;
+      }
+      const data = await gpsService.getVehicleStops(plate, start, end);
+      res.json({ ok: true, data });
+    } catch (err) { next(err); }
+  },
+
+  async getFleetKpi(req, res, next) {
+    try {
+      const date = req.query.date || new Date().toISOString().slice(0, 10);
+      const data = await gpsService.getFleetKpi(date);
+      res.json({ ok: true, data });
+    } catch (err) { next(err); }
+  },
+
+  async getFleetOdometer(req, res, next) {
+    try {
+      const data = await gpsService.getFleetOdometer();
+      res.json({ ok: true, data });
+    } catch (err) { next(err); }
+  },
+
   postDriverLocation(req, res, next) {
     try {
       gpsService.setDriverLocation(req.user.id, req.body.lat, req.body.lng, req.user.name);
